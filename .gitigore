@@ -1,0 +1,10 @@
+# ignore test data
+data/
+*.fit
+
+# ignore db file
+endurance_life.db
+
+# ignore Python cache
+__pycache__/
+*.pyc
