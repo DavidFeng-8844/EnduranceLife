@@ -51,7 +51,7 @@ from app.models import Activity, PhysiologyLog  # noqa: E402
 INITIAL_VO2MAX = 42.0           # mL/kg/min — average untrained male
 INITIAL_RESTING_HR = 65         # bpm
 INITIAL_WEIGHT_KG = 65.0        # kg
-INITIAL_HEIGHT_CM = 177.0       # cm — constant (adults don't grow)
+INITIAL_HEIGHT_CM = 165.0       # cm — constant (adults don't grow)
 INITIAL_THRESHOLD_HR = 170      # bpm — lactate threshold heart rate
 INITIAL_THRESHOLD_PACE = 300    # sec/km — 5:00/km threshold pace
 

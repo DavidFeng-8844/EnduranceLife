@@ -106,6 +106,11 @@ class PhysiologyLog(Base):
         comment="JSON string of pace zone definitions",
     )
 
+    # One snapshot per user per date — prevents duplicate seeding runs
+    __table_args__ = (
+        UniqueConstraint("pid", "date", name="uq_physiology_log_pid_date"),
+    )
+
 
 class DailyMetric(Base):
     """
