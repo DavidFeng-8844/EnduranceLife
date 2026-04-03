@@ -14,7 +14,7 @@ Run with:
 from fastapi import FastAPI
 
 from .database import engine, Base
-from .routers import activity, daily_metric, physiology
+from .routers import activity, daily_metric, physiology, analytics
 
 # ---------------------------------------------------------------------------
 # Create tables — idempotent; safe to call on every startup.
@@ -41,6 +41,7 @@ app = FastAPI(
 app.include_router(activity.router)
 app.include_router(daily_metric.router)
 app.include_router(physiology.router)
+app.include_router(analytics.router)
 
 
 # ---------------------------------------------------------------------------
