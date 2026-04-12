@@ -19,6 +19,7 @@ import warnings
 from datetime import date as date_type, datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, Form
+from fastapi.responses import Response
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 from typing import Optional
@@ -213,7 +214,8 @@ def upload_fit_file(
     """
     Upload a `.fit` file directly through Swagger UI or any HTTP client.
 
-    The file is parsed in-memory (never saved to disk) using `fitdecode`.
+    The file is parsed in-memory using `fitdecode` and the raw bytes are
+    stored in the database (`fit_file_blob`) for later re-parsing or download.
     Extracted fields include distance, duration, heart rate, pace, GPS
     coordinates, cadence, and time-series arrays.
 
@@ -252,10 +254,11 @@ def upload_fit_file(
             ),
         )
 
-    # Build and persist the Activity
+    # Build and persist the Activity (including raw file bytes)
     activity = models.Activity(
         pid=pid,
         source_file=file.filename,
+        fit_file_blob=file_bytes,
         **data,
     )
     db.add(activity)
@@ -272,6 +275,40 @@ def upload_fit_file(
             ),
         )
     return activity
+
+# ---------------------------------------------------------------------------
+# DOWNLOAD (retrieve the stored .fit file)
+# ---------------------------------------------------------------------------
+@router.get(
+    "/{activity_id}/download",
+    summary="Download the original .fit file",
+    responses={
+        200: {"content": {"application/octet-stream": {}}, "description": "Raw .fit file"},
+        404: {"description": "Activity not found or no file stored"},
+    },
+)
+def download_fit_file(activity_id: int, db: Session = Depends(get_db)):
+    """
+    Download the original .fit file that was uploaded for this activity.
+
+    Returns the raw binary with `Content-Disposition: attachment` so the
+    browser triggers a file download.
+    """
+    activity = db.query(models.Activity).filter(models.Activity.id == activity_id).first()
+    if not activity:
+        raise HTTPException(status_code=404, detail="Activity not found")
+    if not activity.fit_file_blob:
+        raise HTTPException(
+            status_code=404,
+            detail="No .fit file stored for this activity (imported via batch script).",
+        )
+    return Response(
+        content=activity.fit_file_blob,
+        media_type="application/octet-stream",
+        headers={
+            "Content-Disposition": f'attachment; filename="{activity.source_file}"'
+        },
+    )
 
 
 # ---------------------------------------------------------------------------

@@ -62,7 +62,7 @@ FastAPI auto-generates interactive API docs:
 |------------------|--------------------------------------------|---------------------------------------|
 | `activities`     | Workout records from .fit files            | Unique `source_file`                  |
 | `daily_metrics`  | Daily nutrition, sleep & recovery logging  | Unique `(pid, date)` composite index  |
-| `physiology_logs`| Body-state snapshots for trend charts      | —                                     |
+| `physiology_logs`| Body-state snapshots for trend charts      | Unique `(pid, date)` composite index  |
 
 ## Data Pipeline Scripts
 
@@ -108,9 +108,11 @@ python -m scripts.seed_physiology --pid 2
 ## API Endpoints
 
 ### CRUD — Activities (`/activities`)
-- `POST /activities/` — Create (409 on duplicate `source_file`)
-- `GET /activities/` — List (filter by `pid`, `type`; paginate with `skip`, `limit`)
+- `POST /activities/` — Create via JSON body (409 on duplicate `source_file`)
+- `POST /activities/upload` — **Upload a .fit file** directly (Swagger UI file picker); parses via `fitdecode` and stores the raw file in the database (`fit_file_blob`)
+- `GET /activities/` — List (filter by `pid`, `type`, `date_from`, `date_to`; paginate with `skip`, `limit`). Response includes `has_fit_file` flag
 - `GET /activities/{id}` — Get one
+- `GET /activities/{id}/download` — **Download the original .fit file** (returns binary with `Content-Disposition: attachment`)
 - `PUT /activities/{id}` — Partial update
 - `DELETE /activities/{id}` — Delete
 
@@ -118,7 +120,8 @@ python -m scripts.seed_physiology --pid 2
 - `POST /daily-metrics/` — Create (409 on duplicate `pid` + `date`)
 - `GET /daily-metrics/` — List (filter by `pid`, `date_from`, `date_to`)
 - `GET /daily-metrics/{id}` — Get one
-- `PUT /daily-metrics/{id}` — Partial update
+- `PUT /daily-metrics/{id}` — Partial update by ID
+- `PUT /daily-metrics/by-date` — Partial update by `pid` + `date` (no need to know the row ID)
 - `DELETE /daily-metrics/{id}` — Delete
 
 ### CRUD — Physiology Logs (`/physiology`)
