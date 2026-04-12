@@ -131,6 +131,47 @@ def update_daily_metric(
 
 
 # ---------------------------------------------------------------------------
+# UPDATE by (pid, date) — more intuitive than by ID since each user
+# has exactly one DailyMetric per day.
+# ---------------------------------------------------------------------------
+@router.put("/by-date", response_model=schemas.DailyMetricRead)
+def update_daily_metric_by_date(
+    pid: int = Query(..., description="User ID"),
+    date: date_type = Query(..., description="Date of the metric (YYYY-MM-DD)"),
+    payload: schemas.DailyMetricUpdate = ...,
+    db: Session = Depends(get_db),
+):
+    """
+    Update a daily metric by (pid, date) composite key.
+
+    This is often more convenient than updating by ID because the client
+    naturally knows the user and date but may not know the row ID.
+    Only fields present in the request body are modified (partial update).
+    """
+    metric = (
+        db.query(models.DailyMetric)
+        .filter(
+            models.DailyMetric.pid == pid,
+            models.DailyMetric.date == date,
+        )
+        .first()
+    )
+    if not metric:
+        raise HTTPException(
+            status_code=404,
+            detail=f"No DailyMetric found for pid={pid} on {date}.",
+        )
+
+    update_data = payload.model_dump(exclude_unset=True)
+    for field, value in update_data.items():
+        setattr(metric, field, value)
+
+    db.commit()
+    db.refresh(metric)
+    return metric
+
+
+# ---------------------------------------------------------------------------
 # DELETE
 # ---------------------------------------------------------------------------
 @router.delete("/{metric_id}", status_code=204)
@@ -142,3 +183,4 @@ def delete_daily_metric(metric_id: int, db: Session = Depends(get_db)):
     db.delete(metric)
     db.commit()
     return None
+
