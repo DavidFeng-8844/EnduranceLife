@@ -1,0 +1,289 @@
+\documentclass[11pt,a4paper]{article}
+
+% ── Packages ──────────────────────────────────────────────────────────────
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{hyperref}
+\usepackage{enumitem}
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{xcolor}
+\usepackage{listings}
+\usepackage{parskip}
+\usepackage{fancyhdr}
+
+% ── Code listing style ───────────────────────────────────────────────────
+\lstset{
+  basicstyle=\ttfamily\small,
+  breaklines=true,
+  frame=single,
+  rulecolor=\color{gray!40},
+  backgroundcolor=\color{gray!5},
+  keywordstyle=\color{blue!70!black},
+  commentstyle=\color{green!50!black},
+  stringstyle=\color{red!60!black},
+}
+
+% ── Header / Footer ─────────────────────────────────────────────────────
+\pagestyle{fancy}
+\fancyhf{}
+\rhead{\small EnduranceLife API --- Technical Report}
+\lhead{\small David Feng}
+\rfoot{\small Page \thepage}
+
+% ── Title ────────────────────────────────────────────────────────────────
+\title{%
+  \textbf{EnduranceLife API} \\[0.3em]
+  \large Technical Report: Design Choices, Architecture \& Reflections
+}
+\author{David Feng}
+\date{April 2026}
+
+\begin{document}
+\maketitle
+\thispagestyle{fancy}
+
+% ══════════════════════════════════════════════════════════════════════════
+\section{Introduction}
+% ══════════════════════════════════════════════════════════════════════════
+
+EnduranceLife is a RESTful Web Service API designed for managing endurance-sport training data. It ingests workout recordings from Coros GPS watches (via \texttt{.fit} files), cross-references them with daily lifestyle metrics (sleep, nutrition, fatigue) and physiological snapshots (VO2Max, resting heart rate), and exposes five analytics endpoints that produce chart-ready JSON for front-end dashboards.
+
+The service is deployed on \href{https://endurancelife.onrender.com}{Render.com} with a managed PostgreSQL database, while retaining full local-development compatibility via SQLite.
+
+% ══════════════════════════════════════════════════════════════════════════
+\section{Technology Stack \& Justification}
+% ══════════════════════════════════════════════════════════════════════════
+
+\subsection{Programming Language: Python 3.11}
+
+Python was chosen for three reasons:
+\begin{enumerate}[leftmargin=1.5em]
+  \item \textbf{Ecosystem fit.} The \texttt{fitdecode} library --- the only decoder that tolerates Coros's non-standard FIT field sizing --- is a Python package. Using Python eliminates the need for cross-language interop.
+  \item \textbf{Rapid prototyping.} Dynamic typing and a concise syntax accelerated development of the four data-pipeline scripts and the analytics endpoint logic.
+  \item \textbf{Data-science readiness.} Future extensions (e.g.\ ML-based race prediction, anomaly detection) can leverage Python's NumPy / scikit-learn ecosystem without rewriting the service.
+\end{enumerate}
+
+\subsection{Framework: FastAPI}
+
+FastAPI was selected over Flask and Django REST Framework (DRF):
+
+\begin{table}[h]
+\centering
+\begin{tabular}{@{}lll@{}}
+\toprule
+\textbf{Criterion} & \textbf{FastAPI} & \textbf{Alternatives} \\
+\midrule
+Auto-generated docs & Swagger + ReDoc built-in & Flask: manual; DRF: partial \\
+Type validation      & Pydantic V2 (native)     & Flask: add-on; DRF: serializers \\
+Async support        & First-class ASGI         & Flask: WSGI; DRF: partial \\
+Performance          & Comparable to Go/Node    & Flask/DRF notably slower \\
+Learning curve       & Minimal boilerplate      & DRF: steeper \\
+\bottomrule
+\end{tabular}
+\caption{Framework comparison matrix}
+\end{table}
+
+FastAPI's automatic OpenAPI schema generation was particularly valuable: every endpoint is immediately testable via the \texttt{/docs} Swagger UI and documented via \texttt{/redoc}, satisfying the project's requirement for a self-documenting API with zero additional tooling.
+
+\subsection{ORM: SQLAlchemy 2.0}
+
+SQLAlchemy provides database-agnostic ORM mapping, enabling the same Python model classes to work against both SQLite (local development and testing) and PostgreSQL (production on Render). This dual-backend strategy was implemented with a single environment-variable check in \texttt{database.py}.
+
+\subsection{Database: PostgreSQL (Production) / SQLite (Development)}
+
+\begin{itemize}[leftmargin=1.5em]
+  \item \textbf{PostgreSQL} was chosen for production because Render offers a managed free-tier instance, it is a fully relational SQL database satisfying the coursework requirement, and it supports concurrent connections from the Uvicorn worker processes.
+  \item \textbf{SQLite} is used locally and in tests for zero-configuration development. The in-memory SQLite backend makes the 66-test suite execute in under 2 seconds with complete isolation.
+  \item \textbf{Why not NoSQL?} The data model is inherently relational: activities reference a user (\texttt{pid}), daily metrics are keyed by \texttt{(pid, date)}, and analytics queries rely on SQL aggregations (\texttt{GROUP BY}, \texttt{SUM}, \texttt{MIN}). A document store would complicate these cross-entity joins.
+\end{itemize}
+
+\subsection{Deployment: Render.com}
+
+Render was chosen for its GitHub-integrated CI/CD pipeline, free PostgreSQL tier, and automatic HTTPS. The deployment requires only two configuration values:
+
+\begin{lstlisting}[language=bash]
+Build Command:  pip install -r requirements.txt
+Start Command:  uvicorn app.main:app --host 0.0.0.0 --port $PORT
+\end{lstlisting}
+
+A \texttt{.python-version} file pins the runtime to Python 3.11.7 to ensure pre-built wheels are available for \texttt{pydantic-core} (which requires Rust compilation on unsupported versions).
+
+% ══════════════════════════════════════════════════════════════════════════
+\section{Architecture \& Design Decisions}
+% ══════════════════════════════════════════════════════════════════════════
+
+\subsection{Project Structure}
+
+The codebase follows a \textbf{domain-driven router pattern}:
+
+\begin{lstlisting}
+app/
+  main.py           # Entry point, router registration
+  database.py       # Engine + session factory (PostgreSQL / SQLite)
+  models.py         # SQLAlchemy ORM table definitions
+  schemas.py        # Pydantic request/response models
+  routers/
+    activity.py     # CRUD + .fit upload
+    daily_metric.py # CRUD + composite-key update
+    physiology.py   # CRUD for physiological snapshots
+    analytics.py    # 5 dashboard-facing endpoints
+\end{lstlisting}
+
+Each router owns a single URL prefix and tag, keeping concerns isolated and enabling independent testing.
+
+\subsection{Data Pipeline Architecture}
+
+Four standalone scripts in \texttt{scripts/} form a sequential ETL pipeline:
+
+\begin{enumerate}[leftmargin=1.5em]
+  \item \textbf{import\_fit.py} --- Parse \texttt{.fit} binary files, extract session metadata and per-second time-series, insert into the \texttt{activities} table.
+  \item \textbf{enrich\_weather.py} --- Call the Open-Meteo Historical Weather API to backfill temperature, humidity, and air pressure for each GPS-tagged activity.
+  \item \textbf{seed\_daily\_metrics.py} --- Generate correlated simulated lifestyle data for every activity date.
+  \item \textbf{seed\_physiology.py} --- Generate bi-weekly physiological snapshots with cumulative fitness progression.
+\end{enumerate}
+
+All scripts use \textbf{batch commits} (configurable, default 30--50 records per flush) and \textbf{in-memory duplicate detection} (pre-loading existing keys into a \texttt{set()}) to minimize network round-trips when operating against a remote PostgreSQL instance.
+
+\subsection{Analytics Engine}
+
+The five analytics endpoints are designed as \textbf{pure SQL aggregations} wrapped in Pydantic response models:
+
+\begin{itemize}[leftmargin=1.5em]
+  \item \textbf{Race Predictor} uses the Daniels VO2-velocity quadratic formula ($\text{VO2} = -4.60 + 0.182258v + 0.000104v^2$) with calibrated sustainability factors derived from real-world performance data.
+  \item \textbf{Performance Records} track fixed-distance best times (Run: 5K / 10K / Half Marathon; Ride: 10K / 50K / 100K) with anomaly filtering that excludes paces outside physiologically plausible ranges ($<$ 2:30/km or $>$ 10:00/km for runs; $<$ 8 km/h or $>$ 70 km/h for rides).
+  \item \textbf{Environment \& Lifestyle insights} use bucketed aggregations (Cold / Moderate / Hot; Good / Poor sleep) to show correlations between external factors and running performance.
+\end{itemize}
+
+\subsection{Dual-Database Strategy}
+
+A single three-line conditional in \texttt{database.py} enables seamless switching:
+
+\begin{lstlisting}[language=Python]
+DATABASE_URL = os.environ.get("DATABASE_URL")
+if DATABASE_URL:
+    # Fix Render's postgres:// -> postgresql://
+    engine = create_engine(DATABASE_URL)
+else:
+    engine = create_engine("sqlite:///./endurance_life.db",
+                           connect_args={"check_same_thread": False})
+\end{lstlisting}
+
+This pattern requires zero code changes between local development, CI testing (in-memory SQLite), and production deployment (Render PostgreSQL).
+
+% ══════════════════════════════════════════════════════════════════════════
+\section{Testing Approach}
+% ══════════════════════════════════════════════════════════════════════════
+
+The project maintains a \textbf{66-test suite} using \texttt{pytest}, organized into four test modules:
+
+\begin{table}[h]
+\centering
+\begin{tabular}{@{}llr@{}}
+\toprule
+\textbf{Module} & \textbf{Scope} & \textbf{Tests} \\
+\midrule
+\texttt{test\_activity.py}      & CRUD + .fit upload + filters + pagination & 19 \\
+\texttt{test\_daily\_metric.py}  & CRUD + composite-key update + validation  & 14 \\
+\texttt{test\_physiology.py}    & CRUD + JSON zone handling                 & 13 \\
+\texttt{test\_analytics.py}     & All 5 analytics endpoints                 & 20 \\
+\bottomrule
+\end{tabular}
+\caption{Test suite breakdown}
+\end{table}
+
+\textbf{Key design decisions:}
+
+\begin{itemize}[leftmargin=1.5em]
+  \item \textbf{In-memory SQLite} --- Every test session spins up a fresh \texttt{sqlite:///:memory:} database via a pytest fixture, ensuring complete isolation and sub-2-second execution.
+  \item \textbf{Fixture composition} --- \texttt{conftest.py} provides layered fixtures (\texttt{db\_session} $\rightarrow$ \texttt{client} $\rightarrow$ \texttt{sample\_activity} $\rightarrow$ \texttt{analytics\_data}) that build on each other, reducing boilerplate.
+  \item \textbf{Edge-case coverage} --- Tests verify 409 on duplicates, 422 on validation failures, 404 on missing resources, anomaly filtering thresholds, and distance-band matching for PR records.
+\end{itemize}
+
+% ══════════════════════════════════════════════════════════════════════════
+\section{Challenges \& Lessons Learned}
+% ══════════════════════════════════════════════════════════════════════════
+
+\subsection{Coros FIT File Parsing}
+
+Coros watches produce non-standard FIT files where fields declared as \texttt{uint32} are packed into fewer bytes. The popular \texttt{fitparse} library crashes on these files with \texttt{FitParseError}. Switching to \texttt{fitdecode} --- which emits warnings instead of exceptions --- resolved this entirely. \textbf{Lesson:} when dealing with hardware vendor data, always test with real device exports, not just synthetic test files.
+
+\subsection{Route Ordering in FastAPI}
+
+A subtle bug emerged where \texttt{PUT /daily-metrics/by-date} was being captured by the \texttt{PUT /daily-metrics/\{metric\_id\}} route, because FastAPI matches routes in declaration order and parsed \texttt{"by-date"} as a path parameter. Moving the \texttt{/by-date} route \emph{before} the \texttt{/\{metric\_id\}} route fixed the issue. \textbf{Lesson:} in path-parameter-heavy APIs, always declare specific literal paths before parameterized ones.
+
+\subsection{Remote Database Performance}
+
+Initial data-pipeline scripts committed every record individually, resulting in 1430+ network round-trips across the Pacific to Render's Oregon-based PostgreSQL. This took over 10 minutes. Refactoring to batch commits (30--50 records per flush) with in-memory duplicate detection reduced the import time to under 3 minutes. \textbf{Lesson:} database access patterns that are invisible with local SQLite become critical bottlenecks with remote databases.
+
+\subsection{Python Version Pinning}
+
+Render defaulted to Python 3.14, which lacks pre-built wheels for \texttt{pydantic-core}. The resulting Rust compilation failed on Render's read-only filesystem. Adding a \texttt{.python-version} file pinning to 3.11.7 resolved this. \textbf{Lesson:} always pin your runtime version for cloud deployments.
+
+\subsection{CDN Accessibility}
+
+FastAPI's default Swagger UI and ReDoc pages load JavaScript from \texttt{cdn.jsdelivr.net}, which is blocked in mainland China. A custom \texttt{/redoc} endpoint serving the script from \texttt{unpkg.com} was implemented as a workaround. \textbf{Lesson:} CDN availability varies by region; self-hosting or alternative CDNs may be necessary.
+
+% ══════════════════════════════════════════════════════════════════════════
+\section{Limitations \& Future Work}
+% ══════════════════════════════════════════════════════════════════════════
+
+\subsection{Current Limitations}
+
+\begin{itemize}[leftmargin=1.5em]
+  \item \textbf{No authentication.} The API is fully open; any client can read/write any user's data. A JWT-based auth layer would be needed for production use.
+  \item \textbf{Schema migrations.} Tables are created via \texttt{Base.metadata.create\_all()}, which cannot handle column additions or renames. Alembic should be adopted for schema versioning.
+  \item \textbf{Single-user focus.} The \texttt{pid} parameter enables multi-user data storage, but there is no user registration, profile management, or access control.
+  \item \textbf{Simulated lifestyle data.} The \texttt{seed\_daily\_metrics} and \texttt{seed\_physiology} scripts generate mock data. A real integration would import from wearable APIs (e.g.\ Coros Health SDK, Apple HealthKit).
+  \item \textbf{Render free-tier constraints.} The PostgreSQL instance is limited to 1 GB and may be recycled after 90 days of inactivity.
+\end{itemize}
+
+\subsection{Potential Improvements}
+
+\begin{itemize}[leftmargin=1.5em]
+  \item \textbf{Real-time sync} --- Implement OAuth-based integration with Coros / Garmin Connect to auto-import new activities.
+  \item \textbf{ML race predictor} --- Replace the formula-based predictor with a regression model trained on the user's actual race results.
+  \item \textbf{Frontend dashboard} --- Build a Vue.js or React SPA consuming the analytics endpoints, with ECharts for interactive charts.
+  \item \textbf{WebSocket notifications} --- Push real-time updates when new activities are imported or weather data is enriched.
+  \item \textbf{Containerization} --- Dockerize the application for reproducible deployments across cloud providers.
+\end{itemize}
+
+% ══════════════════════════════════════════════════════════════════════════
+\section{Generative AI Declaration}
+% ══════════════════════════════════════════════════════════════════════════
+
+\subsection{Declaration of Use}
+
+Generative AI tools were used during the development of this project. Specifically, \textbf{Google Gemini (via Antigravity IDE)} was used as a pair-programming assistant throughout the development process.
+
+\subsection{How AI Was Used}
+
+\begin{enumerate}[leftmargin=1.5em]
+  \item \textbf{Code generation.} AI generated initial implementations of CRUD routers, Pydantic schemas, and test fixtures. Every generated block was reviewed, tested, and frequently modified to fit the project's conventions.
+  \item \textbf{Algorithm calibration.} The Daniels VO2-velocity formula implementation was iteratively refined with AI assistance, cross-referencing the mathematical model against my real-world 5K and half-marathon performance data to calibrate sustainability factors.
+  \item \textbf{Debugging.} AI identified the FastAPI route-ordering conflict and the Render Python version incompatibility, both of which would have required significant manual investigation.
+  \item \textbf{Performance optimization.} The batch-commit refactoring of all four data-pipeline scripts was developed collaboratively with AI, discussing trade-offs between memory usage and network round-trips.
+  \item \textbf{Documentation.} This report's structure was drafted with AI assistance, though all technical content reflects my actual design decisions and real development experience.
+\end{enumerate}
+
+\subsection{Critical Reflection}
+
+AI accelerated development significantly --- the 66-test suite and five analytics endpoints were built in a fraction of the time manual development would have required. However, AI assistance also introduced risks:
+
+\begin{itemize}[leftmargin=1.5em]
+  \item \textbf{Over-reliance on suggestions.} The initial race prediction formula generated by AI was mathematically incorrect (a simplistic linear model). It required manual verification against published sports-science research (Daniels' Running Formula) and calibration against real data to produce accurate predictions.
+  \item \textbf{Platform-specific blindspots.} AI initially used Unicode box-drawing characters in print statements that crashed on Windows' CP1252 terminal encoding. Real-world testing caught this.
+  \item \textbf{Shallow understanding.} AI suggested the \texttt{StandaloneLayout} preset for Swagger UI without loading the required standalone preset JavaScript file, causing a runtime error. This was caught by manual testing on the deployed instance.
+\end{itemize}
+
+\textbf{Conclusion:} AI is a powerful productivity multiplier, but it does not replace domain expertise, manual testing, or critical review. Every AI-generated artifact was validated before integration, and several were corrected or discarded. The final codebase reflects a collaborative human-AI development process where human judgement remained the quality gate.
+
+% ══════════════════════════════════════════════════════════════════════════
+\section{Conclusion}
+% ══════════════════════════════════════════════════════════════════════════
+
+EnduranceLife demonstrates a complete RESTful API lifecycle: domain modelling, CRUD operations, file upload handling, external API integration, analytics computation, comprehensive testing, and cloud deployment. The technology choices --- Python, FastAPI, SQLAlchemy, PostgreSQL --- form a cohesive stack that balances development speed with production readiness. The dual-database strategy and batch-optimized data pipelines address the practical challenges of deploying a data-intensive application to a free-tier cloud platform.
+
+\end{document}

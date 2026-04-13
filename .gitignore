@@ -2,6 +2,10 @@
 data/
 *.fit
 
+#only upload pdf in docs
+docs/*.pdf
+
+
 # ignore db file
 # endurance_life.db
 

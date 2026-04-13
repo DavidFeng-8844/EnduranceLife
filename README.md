@@ -76,6 +76,29 @@ By default (no `DATABASE_URL` env var), the app uses a local **SQLite** file `en
 
 The app auto-detects `DATABASE_URL` at startup — if set, it connects to PostgreSQL; otherwise, it falls back to local SQLite. Render's `postgres://` scheme is automatically corrected to `postgresql://` for SQLAlchemy 2.x compatibility.
 
+### 3. Populate the Remote Database
+
+The PostgreSQL database starts empty. Use the **External Database URL** (found in Render Dashboard -> your PostgreSQL -> Info) to run local scripts against the remote DB:
+
+```powershell
+# PowerShell — set DATABASE_URL to the External URL
+$env:DATABASE_URL="postgresql://user:pass@host/dbname"
+
+# Run all data pipeline scripts
+python -m scripts.import_fit              # 1. Import .fit files
+python -m scripts.enrich_weather          # 2. Backfill weather data
+python -m scripts.seed_daily_metrics      # 3. Generate daily metrics
+python -m scripts.seed_physiology         # 4. Generate physiology trends
+
+# Clear the env var when done
+$env:DATABASE_URL=""
+```
+
+```bash
+# Git Bash / Linux / macOS
+DATABASE_URL="postgresql://user:pass@host/dbname" python -m scripts.import_fit
+```
+
 ## Testing
 
 The project includes a comprehensive test suite (66 tests) powered by **pytest**. All tests run against an **in-memory SQLite database** — zero impact on production data.
