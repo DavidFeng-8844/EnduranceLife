@@ -193,33 +193,67 @@ def _format_pace(seconds_per_km: float | int | None) -> str | None:
 
 
 def _format_time(total_seconds: float) -> str:
-    """Convert total seconds to HH:MM:SS."""
+    """Convert total seconds to H:MM:SS or M:SS depending on magnitude."""
     total_seconds = int(round(total_seconds))
     h, remainder = divmod(total_seconds, 3600)
     m, s = divmod(remainder, 60)
-    return f"{h}:{m:02d}:{s:02d}"
+    if h > 0:
+        return f"{h}:{m:02d}:{s:02d}"
+    return f"{m}:{s:02d}"
+
+
+def _vo2max_to_vvo2max(vo2max: float) -> float:
+    """
+    Convert VO2Max (ml/kg/min) to vVO2max (m/min) using the Daniels
+    VO2-velocity quadratic relationship:
+
+        VO2 = -4.60 + 0.182258·v + 0.000104·v²
+
+    Solving for v via the quadratic formula:
+        a = 0.000104
+        b = 0.182258
+        c = -(VO2max + 4.60)
+
+    This is the standard formula from Jack Daniels' "Running Formula".
+    """
+    a = 0.000104
+    b = 0.182258
+    c = -(vo2max + 4.60)
+    discriminant = b * b - 4 * a * c
+    if discriminant < 0:
+        return 0.0
+    v_m_per_min = (-b + math.sqrt(discriminant)) / (2 * a)
+    return v_m_per_min
 
 
 def _predict_race_time(vo2max: float, distance_m: float) -> float:
     """
     Estimate race finish time in seconds using the Daniels running formula.
 
-    Simplified model:
-        velocity at VO2Max (vVO2max) ≈ vo2max * 3.5 / 60  m/s (crude)
-        Race velocity decreases with distance:
-            5K  → ~93% of vVO2max
-            10K → ~88%
-            HM  → ~82%
+    Step 1: Convert VO2Max → vVO2max (m/min) via the Daniels quadratic.
+    Step 2: Apply a distance-dependent sustainability factor — the fraction
+            of vVO2max a runner can maintain over the race distance.
 
-    This is a rough estimation suitable for dashboard display, not for
-    precise coaching. Real predictions need threshold pace testing.
+    Sustainability factors calibrated against real data:
+        VO2Max 63.4 → 5K ≈ 17:55, 10K ≈ 37:30, HM ≈ 1:26:00
+
+        5K  → 88% of vVO2max  (high lactate tolerance, short duration)
+        10K → 84%              (moderate aerobic endurance)
+        HM  → 78%              (glycogen depletion becomes a factor)
+
+    These are within the typical range for trained recreational runners
+    (Daniels uses ~97%/94%/88% for elite, but those assume VDOT-matched
+    pacing — recreational runners sustain a lower fraction).
     """
-    # vVO2max in m/s — simplified from the Daniels formula
-    vvo2max_m_per_s = vo2max * 3.5 / 60.0 / 3.6
+    vvo2max_m_per_min = _vo2max_to_vvo2max(vo2max)
+    if vvo2max_m_per_min <= 0:
+        return 0
 
-    # Sustainability factors (fraction of vVO2max maintainable at race distance)
-    factors = {5000: 0.93, 10000: 0.88, 21097.5: 0.82}
-    factor = factors.get(distance_m, 0.85)
+    vvo2max_m_per_s = vvo2max_m_per_min / 60.0
+
+    # Sustainability factors (fraction of vVO2max at race distance)
+    factors = {5000: 0.88, 10000: 0.84, 21097.5: 0.78}
+    factor = factors.get(distance_m, 0.82)
 
     race_velocity = vvo2max_m_per_s * factor
     if race_velocity <= 0:
