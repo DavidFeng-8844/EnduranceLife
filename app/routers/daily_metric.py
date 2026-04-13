@@ -14,7 +14,7 @@ Design choices:
 
 from datetime import date as date_type
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 from typing import Optional
@@ -98,47 +98,16 @@ def get_daily_metric(metric_id: int, db: Session = Depends(get_db)):
 
 
 # ---------------------------------------------------------------------------
-# UPDATE (partial)
-# ---------------------------------------------------------------------------
-@router.put("/{metric_id}", response_model=schemas.DailyMetricRead)
-def update_daily_metric(
-    metric_id: int,
-    payload: schemas.DailyMetricUpdate,
-    db: Session = Depends(get_db),
-):
-    """
-    Update an existing daily metric. Only fields present in the request
-    body are modified (partial update via `exclude_unset`).
-    """
-    metric = db.query(models.DailyMetric).filter(models.DailyMetric.id == metric_id).first()
-    if not metric:
-        raise HTTPException(status_code=404, detail="DailyMetric not found")
-
-    update_data = payload.model_dump(exclude_unset=True)
-    for field, value in update_data.items():
-        setattr(metric, field, value)
-
-    try:
-        db.commit()
-        db.refresh(metric)
-    except IntegrityError:
-        db.rollback()
-        raise HTTPException(
-            status_code=409,
-            detail="Update would violate the (pid, date) unique constraint.",
-        )
-    return metric
-
-
-# ---------------------------------------------------------------------------
 # UPDATE by (pid, date) — more intuitive than by ID since each user
 # has exactly one DailyMetric per day.
+# IMPORTANT: this route MUST be declared before /{metric_id} to avoid
+# FastAPI matching "by-date" as a path parameter.
 # ---------------------------------------------------------------------------
 @router.put("/by-date", response_model=schemas.DailyMetricRead)
 def update_daily_metric_by_date(
     pid: int = Query(..., description="User ID"),
     date: date_type = Query(..., description="Date of the metric (YYYY-MM-DD)"),
-    payload: schemas.DailyMetricUpdate = ...,
+    payload: schemas.DailyMetricUpdate = Body(...),
     db: Session = Depends(get_db),
 ):
     """
@@ -168,6 +137,39 @@ def update_daily_metric_by_date(
 
     db.commit()
     db.refresh(metric)
+    return metric
+
+
+# ---------------------------------------------------------------------------
+# UPDATE (partial by ID)
+# ---------------------------------------------------------------------------
+@router.put("/{metric_id}", response_model=schemas.DailyMetricRead)
+def update_daily_metric(
+    metric_id: int,
+    payload: schemas.DailyMetricUpdate,
+    db: Session = Depends(get_db),
+):
+    """
+    Update an existing daily metric. Only fields present in the request
+    body are modified (partial update via `exclude_unset`).
+    """
+    metric = db.query(models.DailyMetric).filter(models.DailyMetric.id == metric_id).first()
+    if not metric:
+        raise HTTPException(status_code=404, detail="DailyMetric not found")
+
+    update_data = payload.model_dump(exclude_unset=True)
+    for field, value in update_data.items():
+        setattr(metric, field, value)
+
+    try:
+        db.commit()
+        db.refresh(metric)
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail="Update would violate the (pid, date) unique constraint.",
+        )
     return metric
 
 

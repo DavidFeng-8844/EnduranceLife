@@ -16,10 +16,16 @@ EnduranceLife/
 │   ├── schemas.py               # Pydantic request/response models
 │   └── routers/
 │       ├── __init__.py
-│       ├── activity.py          # CRUD for workout activities
+│       ├── activity.py          # CRUD for workout activities + .fit upload
 │       ├── daily_metric.py      # CRUD for daily nutrition & recovery
 │       ├── physiology.py        # CRUD for physiological snapshots
 │       └── analytics.py         # Dashboard-facing analytics endpoints
+├── tests/                       # Comprehensive test suite (pytest)
+│   ├── conftest.py              # Fixtures: in-memory DB, TestClient, sample data
+│   ├── test_activity.py         # Activity CRUD + .fit upload tests (19 tests)
+│   ├── test_daily_metric.py     # DailyMetric CRUD + by-date update (14 tests)
+│   ├── test_physiology.py       # PhysiologyLog CRUD tests (13 tests)
+│   └── test_analytics.py        # All 5 analytics endpoints (19 tests)
 ├── scripts/                     # Standalone data-pipeline scripts
 │   ├── __init__.py
 │   ├── import_fit.py            # Parse Coros .fit files → Activity table
@@ -46,6 +52,28 @@ uvicorn app.main:app --reload
 ```
 
 The API will be available at **http://127.0.0.1:8000**.
+
+## Testing
+
+The project includes a comprehensive test suite (65 tests) powered by **pytest**. All tests run against an **in-memory SQLite database** — zero impact on production data.
+
+```bash
+# Run the full suite
+python -m pytest tests/ -v
+
+# Run a specific test file
+python -m pytest tests/test_activity.py -v
+
+# Run with coverage (requires pytest-cov)
+python -m pytest tests/ --cov=app --cov-report=term-missing
+```
+
+| Test File | Tests | Coverage |
+|---|---|---|
+| `test_activity.py` | 19 | CRUD + .fit upload + duplicate 409 + date filters + pagination |
+| `test_daily_metric.py` | 14 | CRUD + by-date update + validation + duplicate 409 |
+| `test_physiology.py` | 13 | CRUD + JSON zone handling |
+| `test_analytics.py` | 19 | All 5 analytics endpoints: trends, PRs, training status, environment, lifestyle |
 
 ## API Documentation
 
@@ -109,10 +137,9 @@ python -m scripts.seed_physiology --pid 2
 
 ### CRUD — Activities (`/activities`)
 - `POST /activities/` — Create via JSON body (409 on duplicate `source_file`)
-- `POST /activities/upload` — **Upload a .fit file** directly (Swagger UI file picker); parses via `fitdecode` and stores the raw file in the database (`fit_file_blob`)
-- `GET /activities/` — List (filter by `pid`, `type`, `date_from`, `date_to`; paginate with `skip`, `limit`). Response includes `has_fit_file` flag
+- `POST /activities/upload` — **Upload a .fit file** directly (Swagger UI file picker); parses via `fitdecode` and saves parsed data to the Activity table
+- `GET /activities/` — List (filter by `pid`, `type`, `date_from`, `date_to`; paginate with `skip`, `limit`)
 - `GET /activities/{id}` — Get one
-- `GET /activities/{id}/download` — **Download the original .fit file** (returns binary with `Content-Disposition: attachment`)
 - `PUT /activities/{id}` — Partial update
 - `DELETE /activities/{id}` — Delete
 

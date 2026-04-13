@@ -97,20 +97,9 @@ class ActivityRead(ActivityBase):
     """Response body returned by GET /activities endpoints."""
 
     id: int
-    has_fit_file: bool = Field(
-        False, description="True if the raw .fit file is stored and downloadable"
-    )
 
     # Allow Pydantic to read attributes from SQLAlchemy model instances
     model_config = ConfigDict(from_attributes=True)
-
-    @classmethod
-    def model_validate(cls, obj, **kwargs):
-        """Override to compute has_fit_file from the ORM object."""
-        # Check if the ORM object has a non-null fit_file_blob
-        if hasattr(obj, "fit_file_blob"):
-            obj.__dict__["has_fit_file"] = obj.fit_file_blob is not None
-        return super().model_validate(obj, **kwargs)
 
 
 # ===========================================================================

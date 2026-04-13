@@ -23,7 +23,6 @@ from sqlalchemy import (
     Text,
     Date,
     DateTime,
-    LargeBinary,
     UniqueConstraint,
 )
 
@@ -70,11 +69,6 @@ class Activity(Base):
     training_load = Column(Float, nullable=True, comment="Coros training load metric")
     hr_array_json = Column(Text, nullable=True, comment="JSON array of HR time-series")
     pace_array_json = Column(Text, nullable=True, comment="JSON array of pace time-series")
-    fit_file_blob = Column(
-        LargeBinary,
-        nullable=True,
-        comment="Raw .fit file bytes — preserved for re-parsing or download",
-    )
 
     # Prevent the same .fit file from being imported more than once
     __table_args__ = (
