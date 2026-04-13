@@ -33,9 +33,10 @@ app = FastAPI(
         "and physiological trend tracking."
     ),
     version="0.1.0",
-    # Override ReDoc JS source — the default cdn.jsdelivr.net path is
-    # unreliable in some network environments (e.g. mainland China).
-    redoc_url=None,  # Disable built-in, we'll serve a custom one below
+    # Override both doc pages — the default cdn.jsdelivr.net is unreliable
+    # in some network environments (e.g. mainland China).
+    docs_url=None,    # Custom /docs below using unpkg.com
+    redoc_url=None,   # Custom /redoc below using unpkg.com
 )
 
 # ---------------------------------------------------------------------------
@@ -60,6 +61,38 @@ def health_check():
 # which is unreliable in certain network environments.
 # ---------------------------------------------------------------------------
 from fastapi.responses import HTMLResponse  # noqa: E402
+
+
+@app.get("/docs", include_in_schema=False)
+def custom_swagger_ui():
+    return HTMLResponse(
+        """
+<!DOCTYPE html>
+<html>
+<head>
+    <title>EnduranceLife API — Swagger UI</title>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5.18.2/swagger-ui.css">
+</head>
+<body>
+    <div id="swagger-ui"></div>
+    <script src="https://unpkg.com/swagger-ui-dist@5.18.2/swagger-ui-bundle.js"></script>
+    <script>
+        SwaggerUIBundle({
+            url: "/openapi.json",
+            dom_id: '#swagger-ui',
+            presets: [
+                SwaggerUIBundle.presets.apis,
+                SwaggerUIBundle.SwaggerUIStandalonePreset
+            ],
+            layout: "StandaloneLayout"
+        })
+    </script>
+</body>
+</html>
+        """
+    )
 
 
 @app.get("/redoc", include_in_schema=False)
