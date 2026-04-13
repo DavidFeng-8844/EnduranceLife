@@ -240,19 +240,34 @@ def parse_fit_file(filepath):
 # Main import logic
 # ===========================================================================
 
-def import_all_fit_files(data_dir, pid):
+def import_all_fit_files(data_dir, pid, batch_size=None):
     """
     Scan `data_dir` for .fit files and import each into the Activity table.
 
-    - Files without a session message are skipped (not workout data).
-    - Files that have already been imported (duplicate `source_file`) are
-      caught via IntegrityError and reported as "skipped".
-    - A per-file summary is printed to stdout for monitoring.
+    Optimisations over the naïve approach:
+      - **Batch commits**: records are flushed to the DB in configurable
+        batches (default 30), drastically reducing network round‑trips
+        when writing to a remote PostgreSQL (e.g. Render).
+      - **In‑memory duplicate check**: all existing `source_file` values are
+        pre‑loaded into a set so duplicate detection is O(1) per file —
+        no extra DB query or IntegrityError rollback needed.
+
+    Render‑specific behaviour:
+      - When the ``RENDER`` environment variable is set (Render injects this
+        automatically), ``batch_size`` defaults to **10** to stay within
+        Render's free‑tier memory and statement‑timeout limits.
+      - Locally (no ``RENDER`` env), ``batch_size`` defaults to **30**.
 
     Args:
         data_dir: Path to the directory containing .fit files.
-        pid: The user/person ID to assign to all imported activities.
+        pid:      The user/person ID to assign to all imported activities.
+        batch_size: Number of records per commit. ``None`` = auto‑detect.
     """
+    # --- Auto‑detect batch size based on environment ---
+    is_render = os.environ.get("RENDER") is not None
+    if batch_size is None:
+        batch_size = 10 if is_render else 30
+
     # Ensure database tables exist before importing
     Base.metadata.create_all(bind=engine)
 
@@ -264,19 +279,60 @@ def import_all_fit_files(data_dir, pid):
         print(f"No .fit files found in {data_dir}")
         return
 
-    print(f"Found {len(fit_files)} .fit files in {data_dir}")
+    total = len(fit_files)
+    print(f"Found {total} .fit files in {data_dir}")
+    print(f"Batch size: {batch_size}  |  Environment: {'Render' if is_render else 'local'}")
     print("-" * 60)
+
+    # --- Pre‑load existing source_files for fast duplicate detection ---
+    db = SessionLocal()
+    try:
+        existing_files = set(
+            row[0] for row in db.query(Activity.source_file).all()
+        )
+        print(f"Existing records in DB: {len(existing_files)}")
+    except Exception:
+        existing_files = set()
 
     imported = 0
     skipped_dup = 0
     skipped_no_session = 0
     errors = 0
+    pending = []  # Buffer for batch commit
 
-    db = SessionLocal()
+    def _flush_batch():
+        """Commit the pending batch and handle per‑record integrity errors."""
+        nonlocal imported, skipped_dup
+        if not pending:
+            return
+        try:
+            db.add_all(pending)
+            db.commit()
+            imported += len(pending)
+        except IntegrityError:
+            # Rare edge case: concurrent import or set was stale.
+            # Fall back to one‑by‑one insert for this batch.
+            db.rollback()
+            for record in pending:
+                db.add(record)
+                try:
+                    db.commit()
+                    imported += 1
+                except IntegrityError:
+                    db.rollback()
+                    skipped_dup += 1
+        pending.clear()
+
     try:
         for i, filename in enumerate(fit_files, 1):
+            prefix = f"[{i}/{total}]"
+
+            # --- Fast duplicate check (in‑memory) ---
+            if filename in existing_files:
+                skipped_dup += 1
+                continue
+
             filepath = os.path.join(data_dir, filename)
-            prefix = f"[{i}/{len(fit_files)}]"
 
             # --- Parse the file ---
             try:
@@ -287,32 +343,30 @@ def import_all_fit_files(data_dir, pid):
                 continue
 
             if data is None:
-                # No session message — skip silently (non-workout file)
                 skipped_no_session += 1
                 continue
 
-            # --- Build the Activity ORM object ---
-            activity = Activity(
-                pid=pid,
-                source_file=filename,
-                **data,
+            # --- Queue the record ---
+            activity = Activity(pid=pid, source_file=filename, **data)
+            pending.append(activity)
+            existing_files.add(filename)  # Prevent intra‑batch duplicates
+
+            print(
+                f"{prefix} OK     {filename}  "
+                f"{data['type']:5s}  {data['distance_km']:.1f}km  "
+                f"{data['duration_min']:.0f}min  "
+                f"HR={data['avg_heart_rate'] or '?'}"
             )
 
-            # --- Insert with duplicate detection ---
-            db.add(activity)
-            try:
-                db.commit()
-                imported += 1
-                print(
-                    f"{prefix} OK     {filename}  "
-                    f"{data['type']:5s}  {data['distance_km']:.1f}km  "
-                    f"{data['duration_min']:.0f}min  "
-                    f"HR={data['avg_heart_rate'] or '?'}"
-                )
-            except IntegrityError:
-                db.rollback()
-                skipped_dup += 1
-                # Don't spam output for duplicates — only log if verbose
+            # --- Flush when batch is full ---
+            if len(pending) >= batch_size:
+                _flush_batch()
+                # Progress indicator for long imports
+                print(f"       -- committed batch ({imported} imported so far) --")
+
+        # --- Flush remaining records ---
+        _flush_batch()
+
     finally:
         db.close()
 
@@ -323,7 +377,7 @@ def import_all_fit_files(data_dir, pid):
     print(f"  Skipped (duplicate):{skipped_dup}")
     print(f"  Skipped (no data):  {skipped_no_session}")
     print(f"  Errors:             {errors}")
-    print(f"  Total files:        {len(fit_files)}")
+    print(f"  Total files:        {total}")
 
 
 # ===========================================================================
@@ -345,6 +399,13 @@ if __name__ == "__main__":
         default=1,
         help="User/person ID to assign to imported activities (default: 1)",
     )
+    parser.add_argument(
+        "--batch-size",
+        type=int,
+        default=None,
+        help="Records per commit (default: 30 local, 10 on Render)",
+    )
     args = parser.parse_args()
 
-    import_all_fit_files(args.dir, args.pid)
+    import_all_fit_files(args.dir, args.pid, batch_size=args.batch_size)
+
