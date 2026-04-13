@@ -3,7 +3,7 @@ data/
 *.fit
 
 #only upload pdf in docs
-docs/*.pdf
+!docs/*.pdf
 
 
 # ignore db file
