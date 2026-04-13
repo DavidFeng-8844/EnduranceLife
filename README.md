@@ -1,6 +1,6 @@
 # EnduranceLife API
 
-A RESTful API for managing endurance-sport training data, daily nutrition/recovery metrics, and physiological trend tracking. Built with **Python**, **FastAPI**, **SQLAlchemy** (SQLite), and **Pydantic V2**.
+A RESTful API for managing endurance-sport training data, daily nutrition/recovery metrics, and physiological trend tracking. Built with **Python**, **FastAPI**, **SQLAlchemy**, and **Pydantic V2**. Supports **PostgreSQL** (production) and **SQLite** (local development).
 
 ## Project Structure
 
@@ -11,7 +11,7 @@ EnduranceLife/
 ├── app/                         # Core API package
 │   ├── __init__.py
 │   ├── main.py                  # App entry point — init & router registration
-│   ├── database.py              # SQLAlchemy engine & session config
+│   ├── database.py              # SQLAlchemy engine & session (PostgreSQL / SQLite)
 │   ├── models.py                # ORM table definitions
 │   ├── schemas.py               # Pydantic request/response models
 │   └── routers/
@@ -52,6 +52,29 @@ uvicorn app.main:app --reload
 ```
 
 The API will be available at **http://127.0.0.1:8000**.
+
+By default (no `DATABASE_URL` env var), the app uses a local **SQLite** file `endurance_life.db`. Set `DATABASE_URL` to a PostgreSQL connection string for production.
+
+## Deployment (Render.com)
+
+### 1. Create a PostgreSQL Database
+
+1. Go to [Render Dashboard](https://dashboard.render.com/) → **New** → **PostgreSQL**
+2. Fill in a name (e.g. `endurancelife-db`), select the **Free** plan, click **Create**
+3. Copy the **Internal Database URL** (starts with `postgresql://...`)
+
+### 2. Create a Web Service
+
+1. **New** → **Web Service** → connect your GitHub repo
+2. Configure:
+   - **Runtime**: Python
+   - **Build Command**: `pip install -r requirements.txt`
+   - **Start Command**: `uvicorn app.main:app --host 0.0.0.0 --port $PORT`
+3. Add **Environment Variable**:
+   - `DATABASE_URL` = *(paste the Internal Database URL from step 1)*
+4. Click **Deploy**
+
+The app auto-detects `DATABASE_URL` at startup — if set, it connects to PostgreSQL; otherwise, it falls back to local SQLite. Render's `postgres://` scheme is automatically corrected to `postgresql://` for SQLAlchemy 2.x compatibility.
 
 ## Testing
 
