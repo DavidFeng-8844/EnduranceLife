@@ -2,6 +2,8 @@
 
 A RESTful API for managing endurance-sport training data, daily nutrition/recovery metrics, and physiological trend tracking. Built with **Python**, **FastAPI**, **SQLAlchemy**, and **Pydantic V2**. Supports **PostgreSQL** (production) and **SQLite** (local development).
 
+| Document | Path |
+|---|---|
 | API Documentation (ReDoc export) | [`docs/api_documentation.pdf`](docs/api_documentation.pdf) |
 | Technical Report | [`docs/technical_report.pdf`](docs/technical_report.pdf) |
 
