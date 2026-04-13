@@ -62,36 +62,100 @@ class TestPerformanceRecords:
         r = client.get("/analytics/performance/records?pid=1")
         assert r.status_code == 200
         data = r.json()
-        assert data["longest_run_km"] is None
-        assert data["longest_ride_km"] is None
-        assert data["best_pace_run"] is None
+        assert data["run_records"] == []
+        assert data["ride_records"] == []
 
-    def test_longest_run(self, client, sample_activity):
-        r = client.get("/analytics/performance/records?pid=1")
-        data = r.json()
-        assert data["longest_run_km"] is not None
-        assert data["longest_run_km"]["value"] == 10.5
+    def test_5k_record(self, client, db_session):
+        """A 5.1km run should register as a 5K PR."""
+        from datetime import date as d, datetime, timezone
+        from app import models
 
-    def test_longest_ride(self, client, sample_ride):
-        r = client.get("/analytics/performance/records?pid=1")
-        data = r.json()
-        assert data["longest_ride_km"] is not None
-        assert data["longest_ride_km"]["value"] == 42.0
+        db_session.add(models.Activity(
+            pid=1, source_file="5k.fit", date=d(2024, 6, 1),
+            start_time=datetime(2024, 6, 1, 7, 0, tzinfo=timezone.utc),
+            distance_km=5.1, duration_min=22.0, type="Run",
+            avg_heart_rate=170, avg_pace_sec=259,  # 4:19/km
+        ))
+        db_session.commit()
 
-    def test_best_pace_filters_short_runs(self, client, analytics_data):
-        """Runs shorter than 3km should not count for best pace."""
         r = client.get("/analytics/performance/records?pid=1")
-        data = r.json()
-        best = data["best_pace_run"]
-        assert best is not None
-        assert best["distance_km"] >= 3.0
+        runs = r.json()["run_records"]
+        labels = [rec["label"] for rec in runs]
+        assert "5K" in labels
+        rec = next(rec for rec in runs if rec["label"] == "5K")
+        assert rec["actual_km"] == 5.1
+        assert ":" in rec["duration_formatted"]
+        assert rec["avg_pace_formatted"] == "4:19"
 
-    def test_best_pace_format(self, client, sample_activity):
+    def test_anomalous_pace_excluded(self, client, db_session):
+        """A 5K run with impossibly fast pace (< 2:30/km) should be excluded."""
+        from datetime import date as d, datetime, timezone
+        from app import models
+
+        db_session.add(models.Activity(
+            pid=1, source_file="bad5k.fit", date=d(2024, 7, 1),
+            start_time=datetime(2024, 7, 1, 7, 0, tzinfo=timezone.utc),
+            distance_km=5.0, duration_min=10.0, type="Run",
+            avg_heart_rate=150, avg_pace_sec=120,  # 2:00/km — impossible
+        ))
+        db_session.commit()
+
         r = client.get("/analytics/performance/records?pid=1")
-        data = r.json()
-        best = data["best_pace_run"]
-        assert best is not None
-        assert ":" in best["pace_formatted"]  # e.g. "5:14"
+        runs = r.json()["run_records"]
+        assert len(runs) == 0  # Anomalous run excluded
+
+    def test_out_of_band_distance_excluded(self, client, db_session):
+        """A 7km run should not match 5K (4.8-5.5) or 10K (9.5-10.5)."""
+        from datetime import date as d, datetime, timezone
+        from app import models
+
+        db_session.add(models.Activity(
+            pid=1, source_file="7k.fit", date=d(2024, 6, 1),
+            start_time=datetime(2024, 6, 1, 7, 0, tzinfo=timezone.utc),
+            distance_km=7.0, duration_min=35.0, type="Run",
+            avg_heart_rate=160, avg_pace_sec=300,  # 5:00/km
+        ))
+        db_session.commit()
+
+        r = client.get("/analytics/performance/records?pid=1")
+        assert r.json()["run_records"] == []
+
+    def test_ride_record(self, client, db_session):
+        """A 50km ride should register as a 50km PR."""
+        from datetime import date as d, datetime, timezone
+        from app import models
+
+        db_session.add(models.Activity(
+            pid=1, source_file="ride50.fit", date=d(2024, 6, 1),
+            start_time=datetime(2024, 6, 1, 7, 0, tzinfo=timezone.utc),
+            distance_km=50.5, duration_min=95.0, type="Ride",  # ~31.9 km/h
+            avg_heart_rate=140,
+        ))
+        db_session.commit()
+
+        r = client.get("/analytics/performance/records?pid=1")
+        rides = r.json()["ride_records"]
+        labels = [rec["label"] for rec in rides]
+        assert "50km" in labels
+
+    def test_fastest_wins(self, client, db_session):
+        """When multiple 10K runs exist, the fastest time wins."""
+        from datetime import date as d, datetime, timezone
+        from app import models
+
+        for i, (dur, pace) in enumerate([(50.0, 300), (45.0, 270)]):
+            db_session.add(models.Activity(
+                pid=1, source_file=f"10k_{i}.fit", date=d(2024, 6, i+1),
+                start_time=datetime(2024, 6, i+1, 7, 0, tzinfo=timezone.utc),
+                distance_km=10.0, duration_min=dur, type="Run",
+                avg_heart_rate=160, avg_pace_sec=pace,
+            ))
+        db_session.commit()
+
+        r = client.get("/analytics/performance/records?pid=1")
+        runs = r.json()["run_records"]
+        rec10k = next(rec for rec in runs if rec["label"] == "10K")
+        assert rec10k["duration_min"] == 45.0  # The faster one
 
 
 # ===========================================================================

@@ -86,26 +86,23 @@ class PhysiologyTrendsResponse(BaseModel):
 # Endpoint 2: GET /analytics/performance/records
 # ---------------------------------------------------------------------------
 
-class PersonalRecord(BaseModel):
-    """A single personal-record entry with value and date achieved."""
-    value: float = Field(..., description="The record value (km or sec/km)")
-    date: date
-    activity_id: int
-
-
-class BestPaceRecord(BaseModel):
-    """Best pace with additional context."""
-    avg_pace_sec: int = Field(..., description="Pace in seconds per km")
-    pace_formatted: str = Field(..., description="Pace as M:SS/km string")
-    distance_km: float
+class DistanceRecord(BaseModel):
+    """Best time for a specific target distance."""
+    label: str = Field(..., description="Display label, e.g. '5K', 'Half Marathon'")
+    target_km: float = Field(..., description="Target distance in km")
+    actual_km: float = Field(..., description="Actual recorded distance")
+    duration_min: float = Field(..., description="Finish time in minutes")
+    duration_formatted: str = Field(..., description="Finish time as H:MM:SS or M:SS")
+    avg_pace_sec: Optional[int] = Field(None, description="Average pace sec/km (runs only)")
+    avg_pace_formatted: Optional[str] = Field(None, description="Pace as M:SS/km")
     date: date
     activity_id: int
 
 
 class PerformanceRecordsResponse(BaseModel):
-    longest_run_km: Optional[PersonalRecord] = None
-    longest_ride_km: Optional[PersonalRecord] = None
-    best_pace_run: Optional[BestPaceRecord] = None
+    """Personal records for standard race distances."""
+    run_records: list[DistanceRecord] = Field(default_factory=list, description="Run PRs: 5K, 10K, Half Marathon")
+    ride_records: list[DistanceRecord] = Field(default_factory=list, description="Ride PRs: 10km, 50km, 100km")
 
 
 # ---------------------------------------------------------------------------
@@ -349,87 +346,118 @@ def get_physiology_trends(
     )
 
 
+# Anomaly thresholds — activities outside these are excluded as bad data
+_RUN_MIN_PACE_SEC = 150   # 2:30/km — faster is impossible for endurance running
+_RUN_MAX_PACE_SEC = 600   # 10:00/km — slower is likely a walk or GPS error
+_RIDE_MAX_SPEED_KMH = 70  # 70 km/h average — faster is clearly erroneous
+_RIDE_MIN_SPEED_KMH = 8   # 8 km/h — slower is likely a walk
+
+# Distance bands: (label, target_km, min_km, max_km)
+_RUN_DISTANCES = [
+    ("5K", 5.0, 4.8, 5.5),
+    ("10K", 10.0, 9.5, 10.5),
+    ("Half Marathon", 21.0975, 20.5, 22.0),
+]
+_RIDE_DISTANCES = [
+    ("10km", 10.0, 9.5, 10.5),
+    ("50km", 50.0, 48.0, 52.0),
+    ("100km", 100.0, 95.0, 105.0),
+]
+
+
+def _find_best_time(
+    db: Session,
+    pid: int,
+    activity_type: str,
+    label: str,
+    target_km: float,
+    min_km: float,
+    max_km: float,
+) -> Optional[DistanceRecord]:
+    """
+    Find the fastest (shortest duration) activity within a distance band.
+    Applies anomaly filtering to exclude GPS glitches and corrupted data.
+    """
+    query = (
+        db.query(models.Activity)
+        .filter(
+            models.Activity.pid == pid,
+            models.Activity.type == activity_type,
+            models.Activity.distance_km >= min_km,
+            models.Activity.distance_km <= max_km,
+            models.Activity.duration_min.isnot(None),
+            models.Activity.duration_min > 0,
+        )
+    )
+
+    # Anomaly filtering
+    if activity_type == "Run":
+        query = query.filter(
+            models.Activity.avg_pace_sec.isnot(None),
+            models.Activity.avg_pace_sec >= _RUN_MIN_PACE_SEC,
+            models.Activity.avg_pace_sec <= _RUN_MAX_PACE_SEC,
+        )
+    elif activity_type == "Ride":
+        # speed_kmh = distance_km / (duration_min / 60)
+        # Filter: RIDE_MIN < distance / (duration / 60) < RIDE_MAX
+        #       → distance * 60 / RIDE_MAX < duration < distance * 60 / RIDE_MIN
+        query = query.filter(
+            models.Activity.duration_min > models.Activity.distance_km * 60.0 / _RIDE_MAX_SPEED_KMH,
+            models.Activity.duration_min < models.Activity.distance_km * 60.0 / _RIDE_MIN_SPEED_KMH,
+        )
+
+    best = query.order_by(models.Activity.duration_min.asc()).first()
+    if not best:
+        return None
+
+    return DistanceRecord(
+        label=label,
+        target_km=target_km,
+        actual_km=round(best.distance_km, 2),
+        duration_min=round(best.duration_min, 2),
+        duration_formatted=_format_time(best.duration_min * 60),
+        avg_pace_sec=best.avg_pace_sec if activity_type == "Run" else None,
+        avg_pace_formatted=_format_pace(best.avg_pace_sec) if activity_type == "Run" else None,
+        date=best.date,
+        activity_id=best.id,
+    )
+
+
 @router.get(
     "/performance/records",
     response_model=PerformanceRecordsResponse,
-    summary="Personal records (PRs) — longest distance, fastest pace",
+    summary="Personal records (PRs) — best times for standard race distances",
 )
 def get_performance_records(
     pid: int = Query(1, description="User ID"),
     db: Session = Depends(get_db),
 ):
     """
-    Queries the Activity table for personal bests:
-    - Longest single run (km)
-    - Longest single ride (km)
-    - Fastest average pace for runs ≥ 3 km (filters out short warm-ups)
+    Returns the fastest finish time for each standard race distance:
+
+    **Running:** 5K, 10K, Half Marathon
+    **Cycling:** 10km, 50km, 100km
+
+    Activities are matched to target distances using tolerance bands
+    (e.g. 5K = 4.8–5.5 km). Anomalies are filtered out:
+    - Run pace < 2:30/km or > 10:00/km → excluded
+    - Ride average speed > 70 km/h or < 8 km/h → excluded
     """
-    # -- Longest run --
-    longest_run = (
-        db.query(models.Activity)
-        .filter(
-            models.Activity.pid == pid,
-            models.Activity.type == "Run",
-        )
-        .order_by(models.Activity.distance_km.desc())
-        .first()
-    )
+    run_records = []
+    for label, target, lo, hi in _RUN_DISTANCES:
+        record = _find_best_time(db, pid, "Run", label, target, lo, hi)
+        if record:
+            run_records.append(record)
 
-    # -- Longest ride --
-    longest_ride = (
-        db.query(models.Activity)
-        .filter(
-            models.Activity.pid == pid,
-            models.Activity.type == "Ride",
-        )
-        .order_by(models.Activity.distance_km.desc())
-        .first()
-    )
-
-    # -- Best pace (fastest = lowest sec/km), only for runs >= 3 km --
-    best_pace = (
-        db.query(models.Activity)
-        .filter(
-            models.Activity.pid == pid,
-            models.Activity.type == "Run",
-            models.Activity.distance_km >= 3.0,
-            models.Activity.avg_pace_sec.isnot(None),
-            models.Activity.avg_pace_sec > 0,
-        )
-        .order_by(models.Activity.avg_pace_sec.asc())
-        .first()
-    )
+    ride_records = []
+    for label, target, lo, hi in _RIDE_DISTANCES:
+        record = _find_best_time(db, pid, "Ride", label, target, lo, hi)
+        if record:
+            ride_records.append(record)
 
     return PerformanceRecordsResponse(
-        longest_run_km=(
-            PersonalRecord(
-                value=round(longest_run.distance_km, 2),
-                date=longest_run.date,
-                activity_id=longest_run.id,
-            )
-            if longest_run
-            else None
-        ),
-        longest_ride_km=(
-            PersonalRecord(
-                value=round(longest_ride.distance_km, 2),
-                date=longest_ride.date,
-                activity_id=longest_ride.id,
-            )
-            if longest_ride
-            else None
-        ),
-        best_pace_run=(
-            BestPaceRecord(
-                avg_pace_sec=best_pace.avg_pace_sec,
-                pace_formatted=_format_pace(best_pace.avg_pace_sec),
-                distance_km=round(best_pace.distance_km, 2),
-                date=best_pace.date,
-                activity_id=best_pace.id,
-            )
-            if best_pace
-            else None
-        ),
+        run_records=run_records,
+        ride_records=ride_records,
     )
 
 
