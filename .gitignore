@@ -3,7 +3,7 @@ data/
 *.fit
 
 # ignore db file
-endurance_life.db
+# endurance_life.db
 
 # ignore Python cache
 __pycache__/
