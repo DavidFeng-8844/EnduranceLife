@@ -125,10 +125,17 @@ python -m pytest tests/ --cov=app --cov-report=term-missing
 
 FastAPI auto-generates interactive API docs:
 
-| Format  | URL                                      |
-|---------|------------------------------------------|
-| Swagger | http://127.0.0.1:8000/docs               |
-| ReDoc   | http://127.0.0.1:8000/redoc              |
+| Format  | Local                              | Deployed (Render)                                      |
+|---------|------------------------------------|--------------------------------------------------------|
+| Swagger | http://127.0.0.1:8000/docs         | https://endurancelife.onrender.com/docs                |
+| ReDoc   | http://127.0.0.1:8000/redoc        | https://endurancelife.onrender.com/redoc               |
+
+**PDF exports** (for offline reference):
+
+| Document | Path |
+|---|---|
+| API Documentation (ReDoc export) | [`docs/api_documentation.pdf`](docs/api_documentation.pdf) |
+| Technical Report | [`docs/technical_report.pdf`](docs/technical_report.pdf) |
 
 ## Data Tables
 

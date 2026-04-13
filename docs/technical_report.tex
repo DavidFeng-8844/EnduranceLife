@@ -4,6 +4,7 @@
 \usepackage[utf8]{inputenc}
 \usepackage[T1]{fontenc}
 \usepackage{lmodern}
+\usepackage{amsmath}
 \usepackage[margin=2.5cm]{geometry}
 \usepackage{hyperref}
 \usepackage{enumitem}
@@ -152,7 +153,7 @@ All scripts use \textbf{batch commits} (configurable, default 30--50 records per
 The five analytics endpoints are designed as \textbf{pure SQL aggregations} wrapped in Pydantic response models:
 
 \begin{itemize}[leftmargin=1.5em]
-  \item \textbf{Race Predictor} uses the Daniels VO2-velocity quadratic formula ($\text{VO2} = -4.60 + 0.182258v + 0.000104v^2$) with calibrated sustainability factors derived from real-world performance data.
+  \item \textbf{Race Predictor} uses the Daniels VO2-velocity quadratic formula ($\mathrm{VO2} = -4.60 + 0.182258v + 0.000104v^2$) with calibrated sustainability factors derived from real-world performance data.
   \item \textbf{Performance Records} track fixed-distance best times (Run: 5K / 10K / Half Marathon; Ride: 10K / 50K / 100K) with anomaly filtering that excludes paces outside physiologically plausible ranges ($<$ 2:30/km or $>$ 10:00/km for runs; $<$ 8 km/h or $>$ 70 km/h for rides).
   \item \textbf{Environment \& Lifestyle insights} use bucketed aggregations (Cold / Moderate / Hot; Good / Poor sleep) to show correlations between external factors and running performance.
 \end{itemize}
