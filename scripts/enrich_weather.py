@@ -179,16 +179,15 @@ def enrich_activities(batch_size: int = 500, delay: float = DEFAULT_DELAY):
     Main enrichment loop. Queries for unenriched Activity records, calls the
     weather API for each, and writes the results back to the database.
 
-    The query filter ensures idempotency:
-        WHERE start_lat IS NOT NULL AND temperature IS NULL
-
-    This means re-running the script only processes records that haven't
-    been enriched yet.
+    Commits are batched every 20 records to reduce DB round-trips when
+    writing to a remote PostgreSQL (e.g. Render).
 
     Args:
         batch_size: Maximum number of records to process in one run.
         delay:      Seconds to sleep between API calls.
     """
+    COMMIT_INTERVAL = 20
+
     db = SessionLocal()
 
     try:
@@ -209,17 +208,19 @@ def enrich_activities(batch_size: int = 500, delay: float = DEFAULT_DELAY):
             print("No activities need weather enrichment. All records are up to date.")
             return
 
-        print(f"Found {len(activities)} activities to enrich with weather data.")
-        print(f"API delay: {delay}s between requests")
+        total = len(activities)
+        print(f"Found {total} activities to enrich with weather data.")
+        print(f"API delay: {delay}s | DB commit every {COMMIT_INTERVAL} records")
         print("-" * 70)
 
         updated = 0
         skipped = 0
         errors = 0
+        dirty = 0  # Records modified since last commit
 
         for i, activity in enumerate(activities, 1):
-            date_str = activity.date.isoformat()  # "YYYY-MM-DD"
-            prefix = f"[{i}/{len(activities)}]"
+            date_str = activity.date.isoformat()
+            prefix = f"[{i}/{total}]"
 
             print(
                 f"{prefix} id={activity.id}  {date_str}  "
@@ -235,40 +236,55 @@ def enrich_activities(batch_size: int = 500, delay: float = DEFAULT_DELAY):
 
             if hourly is None:
                 errors += 1
-                print("  → FAILED")
+                print("  -> FAILED")
                 time.sleep(delay)
                 continue
 
             # --- Extract the hour matching start_time ---
             weather = extract_weather_for_hour(hourly, activity.start_time)
 
-            # Check if we actually got meaningful data
             if weather["temperature"] is None and weather["humidity"] is None:
-                print("  → NO DATA for this hour")
+                print("  -> NO DATA for this hour")
                 skipped += 1
                 time.sleep(delay)
                 continue
 
-            # --- Write weather data back to the Activity record ---
+            # --- Write weather data to the Activity record (in-memory) ---
             activity.temperature = weather["temperature"]
             activity.humidity = weather["humidity"]
             activity.air_pressure = weather["air_pressure"]
+            dirty += 1
+            updated += 1
+            print(
+                f"  -> {weather['temperature']}C  "
+                f"{weather['humidity']}%  "
+                f"{weather['air_pressure']}hPa"
+            )
 
+            # --- Batch commit ---
+            if dirty >= COMMIT_INTERVAL:
+                try:
+                    db.commit()
+                    print(f"       -- committed {dirty} records ({updated} updated so far) --")
+                    dirty = 0
+                except Exception as e:
+                    db.rollback()
+                    errors += dirty
+                    updated -= dirty
+                    dirty = 0
+                    print(f"       -- COMMIT ERROR: {e} --")
+
+            time.sleep(delay)
+
+        # Flush remaining dirty records
+        if dirty > 0:
             try:
                 db.commit()
-                updated += 1
-                print(
-                    f"  → {weather['temperature']}°C  "
-                    f"{weather['humidity']}%  "
-                    f"{weather['air_pressure']}hPa"
-                )
             except Exception as e:
                 db.rollback()
-                errors += 1
-                print(f"  → DB ERROR: {e}")
-
-            # --- Rate-limit courtesy delay ---
-            time.sleep(delay)
+                errors += dirty
+                updated -= dirty
+                print(f"       -- FINAL COMMIT ERROR: {e} --")
 
         # --- Summary ---
         print("-" * 70)
@@ -276,7 +292,7 @@ def enrich_activities(batch_size: int = 500, delay: float = DEFAULT_DELAY):
         print(f"  Updated:  {updated}")
         print(f"  Skipped:  {skipped}")
         print(f"  Errors:   {errors}")
-        print(f"  Total:    {len(activities)}")
+        print(f"  Total:    {total}")
 
     finally:
         db.close()

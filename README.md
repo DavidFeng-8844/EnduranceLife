@@ -78,7 +78,7 @@ The app auto-detects `DATABASE_URL` at startup — if set, it connects to Postgr
 
 ## Testing
 
-The project includes a comprehensive test suite (65 tests) powered by **pytest**. All tests run against an **in-memory SQLite database** — zero impact on production data.
+The project includes a comprehensive test suite (66 tests) powered by **pytest**. All tests run against an **in-memory SQLite database** — zero impact on production data.
 
 ```bash
 # Run the full suite
@@ -121,16 +121,17 @@ The `scripts/` directory contains standalone Python modules for populating and e
 
 ### 1. Import .fit Files
 
-Parses Coros-exported `.fit` files using `fitdecode` and inserts them into the `Activity` table. Handles non-standard Coros field sizing, converts units (m→km, s→min, semicircles→degrees), and extracts HR/pace time-series as JSON arrays. Duplicate files are skipped via the `source_file` unique constraint.
+Parses Coros-exported `.fit` files using `fitdecode` and inserts them into the `Activity` table. Handles non-standard Coros field sizing, converts units (m->km, s->min, semicircles->degrees), and extracts HR/pace time-series as JSON arrays. Duplicate files are detected via an in-memory `source_file` set, and inserts use **batch commits** (default 30 records per commit, 10 on Render) to minimize network round-trips to remote databases.
 
 ```bash
-python -m scripts.import_fit                    # default: pid=1, data/coros/
+python -m scripts.import_fit                        # default: pid=1, data/coros/
 python -m scripts.import_fit --pid 2 --dir data/other_watch/
+python -m scripts.import_fit --batch-size 50         # custom batch size
 ```
 
 ### 2. Enrich Weather Data
 
-Backfills `temperature`, `humidity`, and `air_pressure` for Activity records using the [Open-Meteo Historical Weather API](https://open-meteo.com/en/docs/historical-weather-api). Queries activities that have GPS coordinates but no weather data (idempotent). Matches the hourly weather slot to the activity's `start_time`.
+Backfills `temperature`, `humidity`, and `air_pressure` for Activity records using the [Open-Meteo Historical Weather API](https://open-meteo.com/en/docs/historical-weather-api). Queries activities that have GPS coordinates but no weather data (idempotent). Matches the hourly weather slot to the activity's `start_time`. DB writes are batched every 20 records.
 
 ```bash
 python -m scripts.enrich_weather                    # default: 500 records, 0.01s delay
@@ -140,7 +141,7 @@ python -m scripts.enrich_weather --delay 0.5        # slower for rate-limit safe
 
 ### 3. Seed Daily Metrics (Simulated)
 
-Generates realistic mock `DailyMetric` records for every distinct activity date. Values (sleep, fatigue, calories, recovery, etc.) are correlated with that day's training volume — harder days produce higher fatigue, more calories, and lower recovery.
+Generates realistic mock `DailyMetric` records for every distinct activity date. Values (sleep, fatigue, calories, recovery, etc.) are correlated with that day's training volume. Uses **batch commits** (50 per flush) and in-memory duplicate detection for fast remote DB population.
 
 ```bash
 python -m scripts.seed_daily_metrics            # all users
@@ -149,7 +150,7 @@ python -m scripts.seed_daily_metrics --pid 1    # specific user
 
 ### 4. Seed Physiology Logs (Simulated)
 
-Generates bi-weekly `PhysiologyLog` snapshots from the user's first activity date to today with cumulative fitness progression: VO2Max gradually rises, resting HR drops, weight trends down, and threshold HR/pace zones are recalculated at each snapshot.
+Generates bi-weekly `PhysiologyLog` snapshots from the user's first activity date to today with cumulative fitness progression: VO2Max gradually rises, resting HR drops, weight trends down, and threshold HR/pace zones are recalculated at each snapshot. Uses **batch commits** (50 per flush).
 
 ```bash
 python -m scripts.seed_physiology               # default: pid=1
@@ -188,7 +189,7 @@ Chart-ready, strongly-typed endpoints designed for direct consumption by front-e
 | Endpoint | Purpose | Key Output |
 |---|---|---|
 | `GET /analytics/physiology/trends` | Line chart data + current status | VO2Max / RHR / fitness trends, threshold zones, race time predictions (5K/10K/HM) |
-| `GET /analytics/performance/records` | PR trophy display | Longest run, longest ride, fastest pace (runs ≥ 3km) |
+| `GET /analytics/performance/records` | PR trophy display | Fixed-distance best times: Run 5K/10K/HM, Ride 10K/50K/100K (with anomaly filtering) |
 | `GET /analytics/training/status` | Calendar + bar/pie charts | Per-day load/distance, period totals, intensity distribution (Easy/Tempo/Hard) |
 | `GET /analytics/insights/environment` | Temperature impact analysis | Avg HR & pace across Cold (<10°C) / Moderate (10–22°C) / Hot (>22°C) |
 | `GET /analytics/insights/lifestyle` | Sleep & fatigue correlation | A/B comparison of performance with good vs poor sleep, high vs low fatigue |

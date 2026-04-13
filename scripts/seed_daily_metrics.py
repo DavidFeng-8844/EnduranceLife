@@ -111,18 +111,24 @@ def generate_daily_metric(pid, date, total_distance_km, total_duration_min):
 def seed_daily_metrics(pid_filter=None):
     """
     Query all distinct (pid, date) pairs from Activity and insert a
-    simulated DailyMetric row for each.
-
-    Also aggregates total_distance_km and total_duration_min per day to
-    drive the simulation towards realistic, training-correlated values.
+    simulated DailyMetric row for each, using batch commits for speed.
 
     Args:
         pid_filter: If set, only process activities for this user ID.
     """
+    BATCH_SIZE = 50
+
     Base.metadata.create_all(bind=engine)
 
     db = SessionLocal()
     try:
+        # Pre-load existing (pid, date) for fast duplicate check
+        existing = set(
+            (row[0], row[1])
+            for row in db.query(DailyMetric.pid, DailyMetric.date).all()
+        )
+        print(f"Existing DailyMetric records: {len(existing)}")
+
         # Aggregate training volume per (pid, date)
         query = (
             db.query(
@@ -144,40 +150,49 @@ def seed_daily_metrics(pid_filter=None):
             print("No activity dates found in the database.")
             return
 
-        print(f"Found {len(day_summaries)} unique (pid, date) pairs from Activity table.")
+        total = len(day_summaries)
+        print(f"Found {total} unique (pid, date) pairs from Activity table.")
         print("-" * 60)
 
         inserted = 0
         skipped = 0
+        pending = []
 
         for i, (pid, date, total_dist, total_dur) in enumerate(day_summaries, 1):
+            if (pid, date) in existing:
+                skipped += 1
+                continue
+
             metric = generate_daily_metric(
                 pid=pid,
                 date=date,
                 total_distance_km=total_dist or 0,
                 total_duration_min=total_dur or 0,
             )
+            pending.append(metric)
+            existing.add((pid, date))
 
-            db.add(metric)
-            try:
+            if i % 100 == 0 or i == total:
+                print(f"[{i}/{total}] processing... ({len(pending)} queued)")
+
+            if len(pending) >= BATCH_SIZE:
+                db.add_all(pending)
                 db.commit()
-                inserted += 1
-                print(
-                    f"[{i}/{len(day_summaries)}] {date}  pid={pid}  "
-                    f"sleep={metric.sleep_hours}h  fatigue={metric.fatigue_level}  "
-                    f"recovery={metric.recovery}%  cal={metric.calories_in}  "
-                    f"deep_work={metric.deep_work_hours}h"
-                )
-            except IntegrityError:
-                db.rollback()
-                skipped += 1
-                # Row for this (pid, date) already exists — skip silently
+                inserted += len(pending)
+                pending.clear()
+
+        # Flush remaining
+        if pending:
+            db.add_all(pending)
+            db.commit()
+            inserted += len(pending)
+            pending.clear()
 
         print("-" * 60)
         print(f"Seeding complete:")
         print(f"  Inserted: {inserted}")
         print(f"  Skipped (already exists): {skipped}")
-        print(f"  Total dates: {len(day_summaries)}")
+        print(f"  Total dates: {total}")
 
     finally:
         db.close()
