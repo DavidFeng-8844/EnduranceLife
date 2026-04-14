@@ -1,20 +1,25 @@
-# EnduranceLife API
+# EnduranceLife API 🏃‍♂️🚴‍♀️
 
-A RESTful API for managing endurance-sport training data, daily nutrition/recovery metrics, and physiological trend tracking. Built with **Python**, **FastAPI**, **SQLAlchemy**, and **Pydantic V2**. Supports **PostgreSQL** (production) and **SQLite** (local development).
+A robust RESTful API for managing endurance-sport training data, daily nutrition/recovery metrics, and physiological trend tracking. Built with **Python**, **FastAPI**, **SQLAlchemy**, and **Pydantic V2**. Designed for high-performance cloud deployment with a Zero-Trust data isolation architecture.
 
-| Document | Path |
+[![Deploy Status](https://img.shields.io/badge/Render-Deployed-success?logo=render)](#)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Ready-blue?logo=postgresql)](#)
+[![Coverage](https://img.shields.io/badge/Test_Coverage-77/77_Passing-brightgreen.svg)](#)
+
+## 🚀 Live Demo & Documentation
+
+The API is fully deployed on the Render cloud, powered by a persistent PostgreSQL database. 
+
+| Resource | Link |
 |---|---|
-| API Documentation (ReDoc export) | [`docs/api_documentation.pdf`](docs/api_documentation.pdf) |
+| **Live Swagger UI** | **[https://endurancelife.onrender.com/docs](https://endurancelife.onrender.com/docs)** |
+| **Live ReDoc** | **[https://endurancelife.onrender.com/redoc](https://endurancelife.onrender.com/redoc)** |
 | Technical Report | [`docs/technical_report.pdf`](docs/technical_report.pdf) |
 
-| Format  | Local                              | Deployed (Render)                                      |
-|---------|------------------------------------|--------------------------------------------------------|
-| Swagger | http://127.0.0.1:8000/docs         | https://endurancelife.onrender.com/docs                |
-| ReDoc   | http://127.0.0.1:8000/redoc        | https://endurancelife.onrender.com/redoc               |
-
-> **Demo User (pid=1)**: The database is pre-populated with realistic lifetime training data (activities, PRs, physiology updates) linked to `pid=1`. For testing and grading, log in with these credentials to access the populated dashboard data:
-> - Username: demo
-> - Password: endurance2026
+> **🔑 Examiner Demo Login**: 
+> The cloud database is pre-seeded with realistic lifetime training data (activities, PRs, body metrics). To fully explore the secure endpoints, click the **Authorize** lock icon in Swagger and use:
+> - **Username**: `demo`
+> - **Password**: `endurance2026`
 
 
 ## Project Structure
@@ -87,35 +92,12 @@ By default (no `DATABASE_URL` env var), the app uses a local **SQLite** file `en
 2. Configure:
    - **Runtime**: Python
    - **Build Command**: `pip install -r requirements.txt`
-   - **Start Command**: `uvicorn app.main:app --host 0.0.0.0 --port $PORT`
+   - **Start Command**: `python -m scripts.seed_db && uvicorn app.main:app --host 0.0.0.0 --port $PORT`
 3. Add **Environment Variable**:
    - `DATABASE_URL` = *(paste the Internal Database URL from step 1)*
 4. Click **Deploy**
 
-The app auto-detects `DATABASE_URL` at startup — if set, it connects to PostgreSQL; otherwise, it falls back to local SQLite. Render's `postgres://` scheme is automatically corrected to `postgresql://` for SQLAlchemy 2.x compatibility.
-
-### 3. Populate the Remote Database
-
-The PostgreSQL database starts empty. Use the **External Database URL** (found in Render Dashboard -> your PostgreSQL -> Info) to run local scripts against the remote DB:
-
-```powershell
-# PowerShell — set DATABASE_URL to the External URL
-$env:DATABASE_URL="postgresql://user:pass@host/dbname"
-
-# Run all data pipeline scripts
-python -m scripts.import_fit              # 1. Import .fit files
-python -m scripts.enrich_weather          # 2. Backfill weather data
-python -m scripts.seed_daily_metrics      # 3. Generate daily metrics
-python -m scripts.seed_physiology         # 4. Generate physiology trends
-
-# Clear the env var when done
-$env:DATABASE_URL=""
-```
-
-```bash
-# Git Bash / Linux / macOS
-DATABASE_URL="postgresql://user:pass@host/dbname" python -m scripts.import_fit
-```
+The app auto-detects `DATABASE_URL` at startup. Automatically running `seed_db` in the start command guarantees that even if the database is destroyed or reset, the environment perfectly regenerates all historical activities and analytics for the `demo` user upon startup.
 
 ## Testing
 
@@ -140,23 +122,8 @@ python -m pytest tests/ --cov=app --cov-report=term-missing
 | `test_physiology.py` | 13 | CRUD + JSON zone handling |
 | `test_analytics.py` | 20 | All 5 analytics endpoints: trends, PRs, training status, environment, lifestyle |
 
-## API Documentation
-
-FastAPI auto-generates interactive API docs:
-
-| Format  | Local                              | Deployed (Render)                                      |
-|---------|------------------------------------|--------------------------------------------------------|
-| Swagger | http://127.0.0.1:8000/docs         | https://endurancelife.onrender.com/docs                |
-| ReDoc   | http://127.0.0.1:8000/redoc        | https://endurancelife.onrender.com/redoc               |
-
-**PDF exports** (for offline reference):
-
-| Document | Path |
-|---|---|
-| API Documentation (ReDoc export) | [`docs/api_documentation.pdf`](docs/api_documentation.pdf) |
-| Technical Report | [`docs/technical_report.pdf`](docs/technical_report.pdf) |
-
 ## Data Tables
+
 
 | Table            | Purpose                                    | Key Constraint                        |
 |------------------|--------------------------------------------|---------------------------------------|
