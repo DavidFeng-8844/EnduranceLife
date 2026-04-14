@@ -214,6 +214,8 @@ python -m scripts.seed_physiology --pid 2
 - `POST /auth/logout` -- Invalidate the current token (requires auth)
 - `GET /auth/me` -- Get current user profile (requires auth)
 
+> **🔒 Zero-Trust Data Isolation**: All endpoints matching `/activities`, `/daily-metrics`, `/physiology`, and `/analytics` are strictly protected by a `get_current_user` JWT dependency. The system entirely ignores any `pid` submitted by the client (preventing IDOR vulnerabilities) and dynamically scopes all database interactions directly to the authenticated user's ID.
+
 ### CRUD -- Activities (`/activities`)
 The activities module forms the bedrock of objective training datastore:
 - `POST /activities/` -- Create via JSON body (409 on duplicate `source_file`)
