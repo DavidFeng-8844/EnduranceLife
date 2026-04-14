@@ -2,8 +2,17 @@
 data/
 *.fit
 
-#only upload pdf in docs
-!docs/*.pdf
+# Document files
+docs/*.log
+docs/*.aux
+docs/*.out
+docs/*.toc
+docs/*.fls
+docs/*.fdb_latexmk
+docs/*.synctex.gz
+docs/*.nav
+docs/*.snm
+docs/*.xdv
 
 
 # ignore db file

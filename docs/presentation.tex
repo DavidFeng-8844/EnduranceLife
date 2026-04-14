@@ -1,0 +1,130 @@
+\documentclass[mathserif,aspectratio=169]{beamer}
+
+% Theme selection
+\usetheme{Madrid}
+\usecolortheme{beaver}
+
+% Packages
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{hyperref}
+\usepackage{listings}
+
+% Customization
+\setbeamertemplate{navigation symbols}{} % Remove navigation symbols
+\setbeamertemplate{itemize items}[circle]
+
+% Title Page Information
+\title[EnduranceLife Web API]{EnduranceLife: Advanced Physiological \& Training Analytics Platform}
+\subtitle{Final Project Presentation}
+\author{David Feng}
+\institute[University of Leeds]{School of Computing\\University of Leeds}
+\date{\today}
+
+\begin{document}
+
+% Slide 1: Title
+\begin{frame}
+    \titlepage
+\end{frame}
+
+% Slide 2: Project Vision & Context
+\begin{frame}{Project Vision}
+    \textbf{Problem:} Most fitness platforms (like Strava) focus heavily on social features while neglecting deep physiological analytics and lifestyle correlation. 
+    
+    \vspace{0.5cm}
+    \textbf{Solution:} \textit{EnduranceLife} --- A purely objective, data-driven Web API designed for serious endurance athletes.
+    
+    \vspace{0.3cm}
+    \textbf{Key Goals Achieved:}
+    \begin{itemize}
+        \item Automated ingestion of raw binary \texttt{.fit} files (Garmin/Coros).
+        \item Complex SQL-driven analytics and pacing predictions.
+        \item Seamless correlation of objective performance with subjective lifestyle metrics (sleep, fatigue).
+        \item Fully secure, zero-trust data access via JWT.
+    \end{itemize}
+\end{frame}
+
+% Slide 3: System Architecture
+\begin{frame}{System Architecture \& Stack}
+    Built on modern, robust Python technologies to ensure scalability.
+    
+    \vspace{0.3cm}
+    \begin{columns}
+        \column{0.5\textwidth}
+        \textbf{Backend Framework}
+        \begin{itemize}
+            \item \textbf{FastAPI}: High-performance async routing, automated Swagger/OpenAPI docs.
+            \item \textbf{Pydantic V2}: Strict data validation and serialization.
+        \end{itemize}
+        
+        \vspace{0.3cm}
+        \textbf{Database Layer}
+        \begin{itemize}
+            \item \textbf{SQLAlchemy 2.0}: Advanced ORM.
+            \item \textbf{Dual-Database}: SQLite (in-memory tests/local) seamlessly switching to PostgreSQL (Render cloud production).
+        \end{itemize}
+        
+        \column{0.5\textwidth}
+        \begin{center}
+        % A placeholder for a visual diagram if you wish to talk about it
+        \fbox{\parbox{0.8\textwidth}{\centering \vspace{0.2cm} \textbf{Client / Dashboard} \\ $\updownarrow$ (REST JSON / JWT) \\ \textbf{FastAPI Enpoints} \\ $\updownarrow$ (SQL ORM) \\ \textbf{PostgreSQL} \vspace{0.2cm}}}
+        \end{center}
+    \end{columns}
+\end{frame}
+
+% Slide 4: Data Pipeline & Innovation
+\begin{frame}{Innovation: The Data Pipeline}
+    \textbf{Smart Ingestion (\texttt{/activities/upload})}
+    \begin{itemize}
+        \item Accepts native \textbf{binary \texttt{.fit} files}.
+        \item Extracts bounding timestamps, distance, and time-series arrays dynamically via \texttt{fitdecode} instead of demanding tedious JSON entry.
+    \end{itemize}
+
+    \vspace{0.3cm}
+    \textbf{Composite-Key Metrics (\texttt{PUT /daily-metrics/by-date})}
+    \begin{itemize}
+        \item A smart-upsert logic preventing the need for clients to lookup row IDs. Frontend simply dictates "today's sleep data".
+    \end{itemize}
+    
+    \vspace{0.3cm}
+    \textbf{Continuous Testing Data}
+    \begin{itemize}
+        \item Included Python \texttt{scripts/} orchestrate realistic historical seed data generation (physiology, correlated metrics) to prove the analytical logic.
+    \end{itemize}
+\end{frame}
+
+% Slide 5: Analytics Engine
+\begin{frame}{The Analytics Engine}
+    Endpoints entirely offload computation to the SQL layer to prevent CPU/Memory bloat in Python.
+    
+    \vspace{0.2cm}
+    \begin{itemize}
+        \item \textbf{Performance Records (PRs):} Evaluates fixed distance records (5K/10K) while mathematically executing \textbf{anomaly filtering} (e.g. eliminating glitched GPS paces faster than 2:30/km).
+        \item \textbf{Predictive Physiology:} Built-in Daniels VO2-Velocity quadratic formula to estimate sustainable race paces dynamically based on the latest physical snapshot.
+        \item \textbf{Environmental CROSS-JOINs:} Utilizes SQLAlchemy \texttt{case()} to group runs into Cold/Moderate/Hot buckets to mathematically graph cardiovascular drift.
+    \end{itemize}
+\end{frame}
+
+% Slide 6: Security, Testing & Demo
+\begin{frame}{Security \& Quality Assurance (Demo transition)}
+    \textbf{Zero-Trust IDOR Prevention}
+    \begin{itemize}
+        \item Replaced generic payload tracking (\texttt{pid=X}) with a strict \texttt{Depends(get\_current\_user)} architecture.
+        \item Engine completely isolates database writes and analytic reads to the Cryptographically verified JWT token holder.
+    \end{itemize}
+
+    \vspace{0.2cm}
+    \textbf{Testing}
+    \begin{itemize}
+        \item \textbf{77 automated \texttt{pytest} cases} executed on ephemeral in-memory SQLite transactions.
+        \item Ensures edge-cases, validation checks, and data isolation remain undefeated.
+    \end{itemize}
+    
+    \vspace{0.4cm}
+    \begin{center}
+        \textbf{\large $\rightarrow$ Proceeding to Live Swagger UI Demonstration...}
+    \end{center}
+\end{frame}
+
+\end{document}
