@@ -23,10 +23,25 @@ from sqlalchemy import (
     Text,
     Date,
     DateTime,
+    Boolean,
     UniqueConstraint,
 )
 
 from .database import Base
+
+
+class User(Base):
+    """
+    Registered API user for authentication.
+    Passwords are stored as bcrypt hashes — never plaintext.
+    """
+
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True, index=True)
+    username = Column(String, nullable=False, unique=True, index=True)
+    hashed_password = Column(String, nullable=False)
+    is_active = Column(Boolean, default=True, comment="Soft-delete flag")
 
 
 class Activity(Base):

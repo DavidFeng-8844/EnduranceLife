@@ -15,22 +15,25 @@ EnduranceLife/
 ├── README.md                    # This file
 ├── app/                         # Core API package
 │   ├── __init__.py
-│   ├── main.py                  # App entry point — init & router registration
+│   ├── main.py                  # App entry point -- init & router registration
 │   ├── database.py              # SQLAlchemy engine & session (PostgreSQL / SQLite)
-│   ├── models.py                # ORM table definitions
+│   ├── models.py                # ORM table definitions (User, Activity, etc.)
 │   ├── schemas.py               # Pydantic request/response models
+│   ├── auth.py                  # JWT authentication utilities (bcrypt + python-jose)
 │   └── routers/
 │       ├── __init__.py
+│       ├── auth.py              # Register, login, logout, /me
 │       ├── activity.py          # CRUD for workout activities + .fit upload
 │       ├── daily_metric.py      # CRUD for daily nutrition & recovery
 │       ├── physiology.py        # CRUD for physiological snapshots
 │       └── analytics.py         # Dashboard-facing analytics endpoints
 ├── tests/                       # Comprehensive test suite (pytest)
 │   ├── conftest.py              # Fixtures: in-memory DB, TestClient, sample data
+│   ├── test_auth.py             # Auth: register, login, logout, token tests (14 tests)
 │   ├── test_activity.py         # Activity CRUD + .fit upload tests (19 tests)
 │   ├── test_daily_metric.py     # DailyMetric CRUD + by-date update (14 tests)
 │   ├── test_physiology.py       # PhysiologyLog CRUD tests (13 tests)
-│   └── test_analytics.py        # All 5 analytics endpoints (19 tests)
+│   └── test_analytics.py        # All 5 analytics endpoints (20 tests)
 ├── scripts/                     # Standalone data-pipeline scripts
 │   ├── __init__.py
 │   ├── import_fit.py            # Parse Coros .fit files → Activity table
@@ -106,7 +109,7 @@ DATABASE_URL="postgresql://user:pass@host/dbname" python -m scripts.import_fit
 
 ## Testing
 
-The project includes a comprehensive test suite (66 tests) powered by **pytest**. All tests run against an **in-memory SQLite database** — zero impact on production data.
+The project includes a comprehensive test suite (80 tests) powered by **pytest**. All tests run against an **in-memory SQLite database** -- zero impact on production data.
 
 ```bash
 # Run the full suite
@@ -121,10 +124,11 @@ python -m pytest tests/ --cov=app --cov-report=term-missing
 
 | Test File | Tests | Coverage |
 |---|---|---|
+| `test_auth.py` | 14 | Register (success/dup/validation), login (success/wrong/missing), token (/me valid/invalid/none), logout (success/blacklist/re-login/no-token) |
 | `test_activity.py` | 19 | CRUD + .fit upload + duplicate 409 + date filters + pagination |
 | `test_daily_metric.py` | 14 | CRUD + by-date update + validation + duplicate 409 |
 | `test_physiology.py` | 13 | CRUD + JSON zone handling |
-| `test_analytics.py` | 19 | All 5 analytics endpoints: trends, PRs, training status, environment, lifestyle |
+| `test_analytics.py` | 20 | All 5 analytics endpoints: trends, PRs, training status, environment, lifestyle |
 
 ## API Documentation
 
@@ -194,7 +198,13 @@ python -m scripts.seed_physiology --pid 2
 
 ## API Endpoints
 
-### CRUD — Activities (`/activities`)
+### Authentication (`/auth`)
+- `POST /auth/register` -- Create a new user (username + password, 409 on duplicate)
+- `POST /auth/login` -- Authenticate and receive a JWT Bearer token (30 min expiry)
+- `POST /auth/logout` -- Invalidate the current token (requires auth)
+- `GET /auth/me` -- Get current user profile (requires auth)
+
+### CRUD -- Activities (`/activities`)
 - `POST /activities/` — Create via JSON body (409 on duplicate `source_file`)
 - `POST /activities/upload` — **Upload a .fit file** directly (Swagger UI file picker); parses via `fitdecode` and saves parsed data to the Activity table
 - `GET /activities/` — List (filter by `pid`, `type`, `date_from`, `date_to`; paginate with `skip`, `limit`)

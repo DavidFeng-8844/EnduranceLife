@@ -22,6 +22,37 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 # ===========================================================================
+# Authentication schemas
+# ===========================================================================
+
+class UserRegister(BaseModel):
+    """Request body for user registration."""
+    username: str = Field(..., min_length=3, max_length=50, examples=["david"])
+    password: str = Field(..., min_length=6, max_length=100, examples=["strongpass123"])
+
+
+class UserLogin(BaseModel):
+    """Request body for login."""
+    username: str = Field(..., examples=["david"])
+    password: str = Field(..., examples=["strongpass123"])
+
+
+class TokenResponse(BaseModel):
+    """Returned on successful login."""
+    access_token: str
+    token_type: str = "bearer"
+    username: str
+
+
+class UserRead(BaseModel):
+    """Public user info (never expose hashed_password)."""
+    id: int
+    username: str
+    is_active: bool
+    model_config = ConfigDict(from_attributes=True)
+
+
+# ===========================================================================
 # Activity schemas
 # ===========================================================================
 

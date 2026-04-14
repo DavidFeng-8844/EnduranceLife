@@ -124,9 +124,11 @@ The codebase follows a \textbf{domain-driven router pattern}:
 app/
   main.py           # Entry point, router registration
   database.py       # Engine + session factory (PostgreSQL / SQLite)
-  models.py         # SQLAlchemy ORM table definitions
+  models.py         # SQLAlchemy ORM (User, Activity, DailyMetric, ...)
   schemas.py        # Pydantic request/response models
+  auth.py           # JWT utilities (bcrypt hashing, token create/verify)
   routers/
+    auth.py         # Register, login, logout, /me
     activity.py     # CRUD + .fit upload
     daily_metric.py # CRUD + composite-key update
     physiology.py   # CRUD for physiological snapshots
@@ -174,11 +176,29 @@ else:
 
 This pattern requires zero code changes between local development, CI testing (in-memory SQLite), and production deployment (Render PostgreSQL).
 
+\subsection{Authentication}
+
+The API implements JWT-based authentication with four endpoints:
+
+\begin{itemize}[leftmargin=1.5em]
+  \item \texttt{POST /auth/register} --- Create a new user (bcrypt-hashed password storage).
+  \item \texttt{POST /auth/login} --- Verify credentials and return a signed JWT (30~min expiry, configurable via \texttt{TOKEN\_EXPIRE\_MINUTES}).
+  \item \texttt{POST /auth/logout} --- Invalidate the token by blacklisting its unique \texttt{jti} (JWT ID) claim.
+  \item \texttt{GET /auth/me} --- Return the authenticated user's profile.
+\end{itemize}
+
+\textbf{Key design choices:}
+\begin{itemize}[leftmargin=1.5em]
+  \item Each JWT contains a UUID-based \texttt{jti} claim, ensuring that tokens issued in the same second are distinguishable and can be blacklisted independently.
+  \item The \texttt{get\_current\_user} dependency can be injected into any route to enforce authentication.
+  \item The blacklist is in-memory (a Python \texttt{set}); in production, this would be replaced with Redis or a database table for persistence across restarts.
+\end{itemize}
+
 % ══════════════════════════════════════════════════════════════════════════
 \section{Testing Approach}
 % ══════════════════════════════════════════════════════════════════════════
 
-The project maintains a \textbf{66-test suite} using \texttt{pytest}, organized into four test modules:
+The project maintains an \textbf{80-test suite} using \texttt{pytest}, organized into five test modules:
 
 \begin{table}[h]
 \centering
@@ -186,6 +206,7 @@ The project maintains a \textbf{66-test suite} using \texttt{pytest}, organized 
 \toprule
 \textbf{Module} & \textbf{Scope} & \textbf{Tests} \\
 \midrule
+\texttt{test\_auth.py}           & Register, login, logout, token validation & 14 \\
 \texttt{test\_activity.py}      & CRUD + .fit upload + filters + pagination & 19 \\
 \texttt{test\_daily\_metric.py}  & CRUD + composite-key update + validation  & 14 \\
 \texttt{test\_physiology.py}    & CRUD + JSON zone handling                 & 13 \\
@@ -234,9 +255,9 @@ FastAPI's default Swagger UI and ReDoc pages load JavaScript from \texttt{cdn.js
 \subsection{Current Limitations}
 
 \begin{itemize}[leftmargin=1.5em]
-  \item \textbf{No authentication.} The API is fully open; any client can read/write any user's data. A JWT-based auth layer would be needed for production use.
+  \item \textbf{In-memory token blacklist.} The current logout implementation stores invalidated JTIs in a Python \texttt{set}, which is lost on server restart. A Redis-backed blacklist would provide persistence.
   \item \textbf{Schema migrations.} Tables are created via \texttt{Base.metadata.create\_all()}, which cannot handle column additions or renames. Alembic should be adopted for schema versioning.
-  \item \textbf{Single-user focus.} The \texttt{pid} parameter enables multi-user data storage, but there is no user registration, profile management, or access control.
+  \item \textbf{No per-user data isolation.} Authentication is implemented, but CRUD endpoints do not yet enforce that users can only access their own data. Adding \texttt{current\_user.id == activity.pid} guards would complete the authorization layer.
   \item \textbf{Simulated lifestyle data.} The \texttt{seed\_daily\_metrics} and \texttt{seed\_physiology} scripts generate mock data. A real integration would import from wearable APIs (e.g.\ Coros Health SDK, Apple HealthKit).
   \item \textbf{Render free-tier constraints.} The PostgreSQL instance is limited to 1 GB and may be recycled after 90 days of inactivity.
 \end{itemize}
@@ -271,7 +292,7 @@ Generative AI tools were used during the development of this project. Specifical
 
 \subsection{Critical Reflection}
 
-AI accelerated development significantly --- the 66-test suite and five analytics endpoints were built in a fraction of the time manual development would have required. However, AI assistance also introduced risks:
+AI accelerated development significantly --- the 80-test suite and five analytics endpoints were built in a fraction of the time manual development would have required. However, AI assistance also introduced risks:
 
 \begin{itemize}[leftmargin=1.5em]
   \item \textbf{Over-reliance on suggestions.} The initial race prediction formula generated by AI was mathematically incorrect (a simplistic linear model). It required manual verification against published sports-science research (Daniels' Running Formula) and calibration against real data to produce accurate predictions.
