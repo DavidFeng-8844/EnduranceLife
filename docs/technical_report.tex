@@ -306,6 +306,28 @@ AI accelerated development significantly --- the 80-test suite and five analytic
 \textbf{Conclusion:} AI is a powerful productivity multiplier, but it does not replace domain expertise, manual testing, or critical review. Every AI-generated artifact was validated before integration, and several were corrected or discarded. The final codebase reflects a collaborative human-AI development process where human judgement remained the quality gate.
 
 % ══════════════════════════════════════════════════════════════════════════
+\section{Cloud Deployment \& Evidence}
+% ══════════════════════════════════════════════════════════════════════════
+
+The API is fully deployed into a production cloud environment on Render, utilizing a managed PostgreSQL database. To facilitate continuous operation and frictionless evaluation, the deployment integrates an idempotent automatic seeding script (\texttt{scripts.seed\_db}) in the web service Start Command. This ensures the PostgreSQL database always retains a functional, analytics-ready ``demo'' user dashboard upon instantiation.
+
+The successfully deployed endpoints can be explored live via the Swagger UI interface: \url{https://endurancelife.onrender.com/docs}.
+
+\begin{figure}[h]
+    \centering
+    \begin{minipage}{0.45\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{db_screenshot.png}
+        \caption{PostgreSQL Cloud Database Instance}
+    \end{minipage}\hfill
+    \begin{minipage}{0.45\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{swagger-ui_split-screen-get-activity_render-control-center-log_screenshot.png}
+        \caption{API Server Logs \& Swagger UI Integration}
+    \end{minipage}
+\end{figure}
+
+% ══════════════════════════════════════════════════════════════════════════
 \section{Conclusion}
 % ══════════════════════════════════════════════════════════════════════════
 

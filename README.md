@@ -22,6 +22,14 @@ The API is fully deployed on the Render cloud, powered by a persistent PostgreSQ
 > - **Username**: `demo`
 > - **Password**: `endurance2026`
 
+### Proof of Deployment
+Below is the evidence of the API successfully operating in the Render cloud production environment alongside its connected PostgreSQL instance:
+<p float="left">
+  <img src="docs/db_screenshot.png" width="48%" />
+  <img src="docs/swagger-ui_split-screen-get-activity_render-control-center-log_screenshot.png" width="48%" />
+</p>
+
+
 
 ## Project Structure
 

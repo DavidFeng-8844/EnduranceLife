@@ -58,12 +58,21 @@ Finally, utilizing advanced SQL `CASE` and `JOIN` expressions, the system automa
 
 ---
 
-## Slide 6: Security, Testing & Demo Transition
-*(3:45 - 4:45)*
+## Slide 6: Cloud Deployment & Evidence
+*(3:45 - 4:15)*
+
+"As proof of a successful DevOps pipeline, the entire EnduranceLife API is currently live in a production environment on Render. 
+
+The application is securely connected to a persistent, managed PostgreSQL instance shown here on the left. On the right, you can see live server logs and the functional Swagger UI. To ensure this demo remains robust, I engineered an automatic Start Command that dynamically reseeds the PostgreSQL database with historical metadata in the event of an ephemeral server reset."
+
+---
+
+## Slide 7: Security, Testing & Demo Transition
+*(4:15 - 5:00)*
 
 "Lastly, dealing with personal health data requires exceptional security. 
 
-EnduranceLife is protected by a JSON Web Token (JWT) architecture. More importantly, I engineered a **Zero-Trust Data Isolation mechanism**. To protect against IDOR (Insecure Direct Object Reference) vulnerabilities, the system ignores any User IDs sent by the client. Every single database transaction is strictly mapped to the cryptographic token held by the current user.
+EnduranceLife is protected by a JSON Web Token (JWT) architecture. More importantly, I engineered a **Zero-Trust Data Isolation mechanism**. To protect against IDOR vulnerabilities, the system ignores any User IDs sent by the client. Every single database transaction is strictly mapped to the cryptographic token held by the current user.
 
 I've ensured the stability of this logic with a comprehensive test suite of **77 automated pytest cases** that run entirely in-memory, achieving robust coverage against edge cases.
 
@@ -71,5 +80,5 @@ I've ensured the stability of this logic with a comprehensive test suite of **77
 
 That concludes the architecture overview. I'd now like to pivot and show you a very brief live demonstration of the Swagger UI where we can see these systems in action..." 
 
-*(4:45 - 5:00)* 
+*(5:00)* 
 *(Begin your 15-30 second demo of logging in and fetching the Analytics Trends)*
