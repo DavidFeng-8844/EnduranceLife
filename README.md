@@ -7,6 +7,11 @@ A RESTful API for managing endurance-sport training data, daily nutrition/recove
 | API Documentation (ReDoc export) | [`docs/api_documentation.pdf`](docs/api_documentation.pdf) |
 | Technical Report | [`docs/technical_report.pdf`](docs/technical_report.pdf) |
 
+| Format  | Local                              | Deployed (Render)                                      |
+|---------|------------------------------------|--------------------------------------------------------|
+| Swagger | http://127.0.0.1:8000/docs         | https://endurancelife.onrender.com/docs                |
+| ReDoc   | http://127.0.0.1:8000/redoc        | https://endurancelife.onrender.com/redoc               |
+
 > **Demo User (pid=1)**: The database is pre-populated with realistic lifetime training data (activities, PRs, physiology updates) linked to `pid=1`. For testing and grading, log in with these credentials to access the populated dashboard data:
 > - Username: demo
 > - Password: endurance2026
