@@ -15,6 +15,7 @@ Security model:
 """
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 
 from ..database import get_db
@@ -80,7 +81,7 @@ def register(payload: UserRegister, db: Session = Depends(get_db)):
     summary="Login and get a JWT token",
     responses={401: {"description": "Invalid credentials"}},
 )
-def login(payload: UserLogin, db: Session = Depends(get_db)):
+def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
     """
     Authenticate with username and password.
 
@@ -90,9 +91,9 @@ def login(payload: UserLogin, db: Session = Depends(get_db)):
     Use the token in the `Authorization: Bearer <token>` header for
     protected endpoints.
     """
-    user = db.query(User).filter(User.username == payload.username).first()
+    user = db.query(User).filter(User.username == form_data.username).first()
 
-    if not user or not verify_password(payload.password, user.hashed_password):
+    if not user or not verify_password(form_data.password, user.hashed_password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect username or password",

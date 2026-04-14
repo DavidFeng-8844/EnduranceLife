@@ -30,6 +30,7 @@ from sqlalchemy import func, case, and_
 from sqlalchemy.orm import Session
 
 from ..database import get_db
+from ..auth import get_current_user
 from .. import models
 
 
@@ -268,9 +269,9 @@ def _predict_race_time(vo2max: float, distance_m: float) -> float:
     summary="Physiology trend data for line charts + race predictions",
 )
 def get_physiology_trends(
-    pid: int = Query(1, description="User ID"),
     limit: int = Query(12, ge=1, le=100, description="Number of recent snapshots"),
     db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
 ):
     """
     Returns physiological trend data (VO2Max, resting HR, running fitness,
@@ -283,7 +284,7 @@ def get_physiology_trends(
     # Fetch the most recent `limit` snapshots, then reverse to ascending order
     logs = (
         db.query(models.PhysiologyLog)
-        .filter(models.PhysiologyLog.pid == pid)
+        .filter(models.PhysiologyLog.pid == current_user.id)
         .order_by(models.PhysiologyLog.date.desc())
         .limit(limit)
         .all()
@@ -429,8 +430,8 @@ def _find_best_time(
     summary="Personal records (PRs) — best times for standard race distances",
 )
 def get_performance_records(
-    pid: int = Query(1, description="User ID"),
     db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
 ):
     """
     Returns the fastest finish time for each standard race distance:
@@ -445,13 +446,13 @@ def get_performance_records(
     """
     run_records = []
     for label, target, lo, hi in _RUN_DISTANCES:
-        record = _find_best_time(db, pid, "Run", label, target, lo, hi)
+        record = _find_best_time(db, current_user.id, "Run", label, target, lo, hi)
         if record:
             run_records.append(record)
 
     ride_records = []
     for label, target, lo, hi in _RIDE_DISTANCES:
-        record = _find_best_time(db, pid, "Ride", label, target, lo, hi)
+        record = _find_best_time(db, current_user.id, "Ride", label, target, lo, hi)
         if record:
             ride_records.append(record)
 
@@ -471,9 +472,9 @@ def get_performance_records(
     summary="Daily training load calendar + intensity distribution pie chart",
 )
 def get_training_status(
-    pid: int = Query(1, description="User ID"),
     days: int = Query(30, ge=1, le=365, description="Lookback window in days"),
     db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
 ):
     """
     Aggregates Activity data over the past N days:
@@ -510,7 +511,7 @@ def get_training_status(
             func.count(models.Activity.id).label("activity_count"),
         )
         .filter(
-            models.Activity.pid == pid,
+            models.Activity.pid == current_user.id,
             models.Activity.date >= cutoff,
         )
         .group_by(models.Activity.date)
@@ -555,7 +556,7 @@ def get_training_status(
             func.coalesce(func.sum(models.Activity.duration_min), 0).label("total_dur"),
         )
         .filter(
-            models.Activity.pid == pid,
+            models.Activity.pid == current_user.id,
             models.Activity.date >= cutoff,
         )
         .first()
@@ -587,7 +588,7 @@ def get_training_status(
             func.count(models.Activity.id).label("cnt"),
         )
         .filter(
-            models.Activity.pid == pid,
+            models.Activity.pid == current_user.id,
             models.Activity.date >= cutoff,
             models.Activity.avg_heart_rate.isnot(None),
         )
@@ -624,8 +625,8 @@ def get_training_status(
     summary="How temperature affects running performance",
 )
 def get_environment_insights(
-    pid: int = Query(1, description="User ID"),
     db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
 ):
     """
     Segments running activities by temperature into Cold (< 10°C),
@@ -637,7 +638,7 @@ def get_environment_insights(
     """
     # Base filter: runs with temperature and heart-rate data
     base_filter = and_(
-        models.Activity.pid == pid,
+        models.Activity.pid == current_user.id,
         models.Activity.type == "Run",
         models.Activity.temperature.isnot(None),
         models.Activity.avg_heart_rate.isnot(None),
@@ -704,8 +705,8 @@ def get_environment_insights(
     summary="How sleep and fatigue correlate with running performance",
 )
 def get_lifestyle_insights(
-    pid: int = Query(1, description="User ID"),
     db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
 ):
     """
     Joins Activity (Run) with same-day DailyMetric to analyse:
@@ -727,7 +728,7 @@ def get_lifestyle_insights(
             ),
         )
         .filter(
-            models.Activity.pid == pid,
+            models.Activity.pid == current_user.id,
             models.Activity.type == "Run",
             models.Activity.avg_heart_rate.isnot(None),
             models.Activity.avg_pace_sec.isnot(None),

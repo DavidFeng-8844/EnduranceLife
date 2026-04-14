@@ -20,6 +20,7 @@ from sqlalchemy.exc import IntegrityError
 from typing import Optional
 
 from ..database import get_db
+from ..auth import get_current_user
 from .. import models, schemas
 
 router = APIRouter(prefix="/daily-metrics", tags=["Daily Metrics"])
@@ -32,6 +33,7 @@ router = APIRouter(prefix="/daily-metrics", tags=["Daily Metrics"])
 def create_daily_metric(
     payload: schemas.DailyMetricCreate,
     db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
 ):
     """
     Create a daily metric record.
@@ -40,7 +42,9 @@ def create_daily_metric(
     Conflict and advises the client to update the existing record via
     PUT /daily-metrics/{id} instead.
     """
-    db_metric = models.DailyMetric(**payload.model_dump())
+    payload_dump = payload.model_dump()
+    payload_dump["pid"] = current_user.id
+    db_metric = models.DailyMetric(**payload_dump)
     db.add(db_metric)
     try:
         db.commit()
@@ -62,12 +66,12 @@ def create_daily_metric(
 # ---------------------------------------------------------------------------
 @router.get("/", response_model=list[schemas.DailyMetricRead])
 def list_daily_metrics(
-    pid: Optional[int] = Query(None, description="Filter by user ID"),
     date_from: Optional[date_type] = Query(None, description="Start of date range (inclusive)"),
     date_to: Optional[date_type] = Query(None, description="End of date range (inclusive)"),
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
     db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
 ):
     """
     Retrieve daily metric records with optional filters.
@@ -75,9 +79,7 @@ def list_daily_metrics(
     `date_from` and `date_to` allow the front-end to request a specific
     window for charting (e.g. the last 30 days).
     """
-    query = db.query(models.DailyMetric)
-    if pid is not None:
-        query = query.filter(models.DailyMetric.pid == pid)
+    query = db.query(models.DailyMetric).filter(models.DailyMetric.pid == current_user.id)
     if date_from is not None:
         query = query.filter(models.DailyMetric.date >= date_from)
     if date_to is not None:
@@ -89,9 +91,16 @@ def list_daily_metrics(
 # READ (single)
 # ---------------------------------------------------------------------------
 @router.get("/{metric_id}", response_model=schemas.DailyMetricRead)
-def get_daily_metric(metric_id: int, db: Session = Depends(get_db)):
+def get_daily_metric(
+    metric_id: int, 
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
     """Retrieve a single daily metric record by primary key."""
-    metric = db.query(models.DailyMetric).filter(models.DailyMetric.id == metric_id).first()
+    metric = db.query(models.DailyMetric).filter(
+        models.DailyMetric.id == metric_id,
+        models.DailyMetric.pid == current_user.id
+    ).first()
     if not metric:
         raise HTTPException(status_code=404, detail="DailyMetric not found")
     return metric
@@ -105,13 +114,13 @@ def get_daily_metric(metric_id: int, db: Session = Depends(get_db)):
 # ---------------------------------------------------------------------------
 @router.put("/by-date", response_model=schemas.DailyMetricRead)
 def update_daily_metric_by_date(
-    pid: int = Query(..., description="User ID"),
     date: date_type = Query(..., description="Date of the metric (YYYY-MM-DD)"),
     payload: schemas.DailyMetricUpdate = Body(...),
     db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
 ):
     """
-    Update a daily metric by (pid, date) composite key.
+    Update a daily metric by date composite key.
 
     This is often more convenient than updating by ID because the client
     naturally knows the user and date but may not know the row ID.
@@ -120,7 +129,7 @@ def update_daily_metric_by_date(
     metric = (
         db.query(models.DailyMetric)
         .filter(
-            models.DailyMetric.pid == pid,
+            models.DailyMetric.pid == current_user.id,
             models.DailyMetric.date == date,
         )
         .first()
@@ -128,7 +137,7 @@ def update_daily_metric_by_date(
     if not metric:
         raise HTTPException(
             status_code=404,
-            detail=f"No DailyMetric found for pid={pid} on {date}.",
+            detail=f"No DailyMetric found for date {date}.",
         )
 
     update_data = payload.model_dump(exclude_unset=True)
@@ -148,12 +157,16 @@ def update_daily_metric(
     metric_id: int,
     payload: schemas.DailyMetricUpdate,
     db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
 ):
     """
     Update an existing daily metric. Only fields present in the request
     body are modified (partial update via `exclude_unset`).
     """
-    metric = db.query(models.DailyMetric).filter(models.DailyMetric.id == metric_id).first()
+    metric = db.query(models.DailyMetric).filter(
+        models.DailyMetric.id == metric_id,
+        models.DailyMetric.pid == current_user.id
+    ).first()
     if not metric:
         raise HTTPException(status_code=404, detail="DailyMetric not found")
 
@@ -177,9 +190,16 @@ def update_daily_metric(
 # DELETE
 # ---------------------------------------------------------------------------
 @router.delete("/{metric_id}", status_code=204)
-def delete_daily_metric(metric_id: int, db: Session = Depends(get_db)):
+def delete_daily_metric(
+    metric_id: int, 
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
     """Delete a daily metric record. Returns 204 No Content on success."""
-    metric = db.query(models.DailyMetric).filter(models.DailyMetric.id == metric_id).first()
+    metric = db.query(models.DailyMetric).filter(
+        models.DailyMetric.id == metric_id,
+        models.DailyMetric.pid == current_user.id
+    ).first()
     if not metric:
         raise HTTPException(status_code=404, detail="DailyMetric not found")
     db.delete(metric)

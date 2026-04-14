@@ -24,6 +24,7 @@ from sqlalchemy.exc import IntegrityError
 from typing import Optional
 
 from ..database import get_db
+from ..auth import get_current_user
 from .. import models, schemas
 
 router = APIRouter(prefix="/activities", tags=["Activities"])
@@ -172,6 +173,7 @@ def _parse_fit_bytes(file_bytes: bytes, filename: str) -> dict | None:
 def create_activity(
     payload: schemas.ActivityCreate,
     db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
 ):
     """
     Import a new activity record via JSON body.
@@ -179,7 +181,10 @@ def create_activity(
     If the `source_file` already exists in the database, a 409 Conflict
     is returned to prevent duplicate imports.
     """
-    db_activity = models.Activity(**payload.model_dump())
+    # Force the activity to belong to the logged-in user
+    payload_dump = payload.model_dump()
+    payload_dump["pid"] = current_user.id
+    db_activity = models.Activity(**payload_dump)
     db.add(db_activity)
     try:
         db.commit()
@@ -207,8 +212,8 @@ def create_activity(
 )
 def upload_fit_file(
     file: UploadFile = File(..., description="A .fit file exported from Coros/Garmin"),
-    pid: int = Form(1, description="User / person ID"),
     db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
 ):
     """
     Upload a `.fit` file directly through Swagger UI or any HTTP client.
@@ -255,7 +260,7 @@ def upload_fit_file(
 
     # Build and persist the Activity
     activity = models.Activity(
-        pid=pid,
+        pid=current_user.id,
         source_file=file.filename,
         **data,
     )
@@ -280,23 +285,21 @@ def upload_fit_file(
 # ---------------------------------------------------------------------------
 @router.get("/", response_model=list[schemas.ActivityRead])
 def list_activities(
-    pid: Optional[int] = Query(None, description="Filter by user ID"),
     type: Optional[str] = Query(None, description="Filter by activity type (Run / Ride)"),
     date_from: Optional[date_type] = Query(None, description="Start of date range (inclusive)"),
     date_to: Optional[date_type] = Query(None, description="End of date range (inclusive)"),
     skip: int = Query(0, ge=0, description="Number of records to skip"),
     limit: int = Query(50, ge=1, le=200, description="Max records to return"),
     db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
 ):
     """
-    Retrieve a paginated list of activities.
+    Retrieve a paginated list of activities scoped to the current user.
 
-    Supports optional filtering by `pid`, `type`, and a date range
+    Supports optional filtering by `type`, and a date range
     (`date_from`, `date_to`) for efficient front-end chart windows.
     """
-    query = db.query(models.Activity)
-    if pid is not None:
-        query = query.filter(models.Activity.pid == pid)
+    query = db.query(models.Activity).filter(models.Activity.pid == current_user.id)
     if type is not None:
         query = query.filter(models.Activity.type == type)
     if date_from is not None:
@@ -310,9 +313,16 @@ def list_activities(
 # READ (single)
 # ---------------------------------------------------------------------------
 @router.get("/{activity_id}", response_model=schemas.ActivityRead)
-def get_activity(activity_id: int, db: Session = Depends(get_db)):
-    """Retrieve a single activity by its primary key."""
-    activity = db.query(models.Activity).filter(models.Activity.id == activity_id).first()
+def get_activity(
+    activity_id: int, 
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    """Retrieve a single activity by its primary key, scoped to current user."""
+    activity = db.query(models.Activity).filter(
+        models.Activity.id == activity_id,
+        models.Activity.pid == current_user.id
+    ).first()
     if not activity:
         raise HTTPException(status_code=404, detail="Activity not found")
     return activity
@@ -326,12 +336,16 @@ def update_activity(
     activity_id: int,
     payload: schemas.ActivityUpdate,
     db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
 ):
     """
     Update an existing activity. Only fields present in the request body
-    (non-None) are applied, allowing partial updates.
+    (non-None) are applied, allowing partial updates. Scoped to current user.
     """
-    activity = db.query(models.Activity).filter(models.Activity.id == activity_id).first()
+    activity = db.query(models.Activity).filter(
+        models.Activity.id == activity_id,
+        models.Activity.pid == current_user.id
+    ).first()
     if not activity:
         raise HTTPException(status_code=404, detail="Activity not found")
 
@@ -356,9 +370,16 @@ def update_activity(
 # DELETE
 # ---------------------------------------------------------------------------
 @router.delete("/{activity_id}", status_code=204)
-def delete_activity(activity_id: int, db: Session = Depends(get_db)):
-    """Delete an activity by its primary key. Returns 204 No Content on success."""
-    activity = db.query(models.Activity).filter(models.Activity.id == activity_id).first()
+def delete_activity(
+    activity_id: int, 
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    """Delete an activity by its primary key. Scoped to current user."""
+    activity = db.query(models.Activity).filter(
+        models.Activity.id == activity_id,
+        models.Activity.pid == current_user.id
+    ).first()
     if not activity:
         raise HTTPException(status_code=404, detail="Activity not found")
     db.delete(activity)

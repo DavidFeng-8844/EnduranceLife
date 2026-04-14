@@ -56,13 +56,6 @@ class TestListPhysiologyLogs:
         r = client.get("/physiology/")
         assert len(r.json()) == 1
 
-    def test_filter_by_pid(self, client, sample_physiology_log):
-        r = client.get("/physiology/?pid=1")
-        assert len(r.json()) == 1
-        r = client.get("/physiology/?pid=999")
-        assert len(r.json()) == 0
-
-
 # ===========================================================================
 # GET /physiology/{id}
 # ===========================================================================

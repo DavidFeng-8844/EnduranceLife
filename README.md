@@ -215,36 +215,39 @@ python -m scripts.seed_physiology --pid 2
 - `GET /auth/me` -- Get current user profile (requires auth)
 
 ### CRUD -- Activities (`/activities`)
-- `POST /activities/` — Create via JSON body (409 on duplicate `source_file`)
-- `POST /activities/upload` — **Upload a .fit file** directly (Swagger UI file picker); parses via `fitdecode` and saves parsed data to the Activity table
-- `GET /activities/` — List (filter by `pid`, `type`, `date_from`, `date_to`; paginate with `skip`, `limit`)
-- `GET /activities/{id}` — Get one
-- `PUT /activities/{id}` — Partial update
-- `DELETE /activities/{id}` — Delete
+The activities module forms the bedrock of objective training datastore:
+- `POST /activities/` -- Create via JSON body (409 on duplicate `source_file`)
+- `POST /activities/upload` -- **FIT File Ingestion**: Parses binary `.fit` files via `fitdecode`. Iterates through data frames to extract start/end bounds, distance, ascent, and dynamically computes averages (HR, pace). It maps these strictly to the `Activity` SQLAlchemy ORM.
+- `GET /activities/` -- List (Implements query-level limits to prevent memory overflow: filter by `pid`, `type`, `date_from`, `date_to`; paginate with `skip`, `limit`)
+- `GET /activities/{id}` -- Get one
+- `PUT /activities/{id}` -- Partial update
+- `DELETE /activities/{id}` -- Delete
 
-### CRUD — Daily Metrics (`/daily-metrics`)
-- `POST /daily-metrics/` — Create (409 on duplicate `pid` + `date`)
-- `GET /daily-metrics/` — List (filter by `pid`, `date_from`, `date_to`)
-- `GET /daily-metrics/{id}` — Get one
-- `PUT /daily-metrics/{id}` — Partial update by ID
-- `PUT /daily-metrics/by-date` — Partial update by `pid` + `date` (no need to know the row ID)
-- `DELETE /daily-metrics/{id}` — Delete
+### CRUD -- Daily Metrics (`/daily-metrics`)
+Handles subjective inputs and lifestyle context for analytics:
+- `POST /daily-metrics/` -- Create (409 on duplicate `pid` + `date`)
+- `GET /daily-metrics/` -- List (filter by `pid`, `date_from`, `date_to`)
+- `GET /daily-metrics/{id}` -- Get one
+- `PUT /daily-metrics/{id}` -- Partial update by ID
+- `PUT /daily-metrics/by-date` -- **Composite-Key Update**: Smart upsert pattern by `pid` + `date`. Allows frontends to submit ``today's updates`` directly without querying the internal row `id` first.
+- `DELETE /daily-metrics/{id}` -- Delete
 
-### CRUD — Physiology Logs (`/physiology`)
-- `POST /physiology/` — Create
-- `GET /physiology/` — List (filter by `pid`)
-- `GET /physiology/{id}` — Get one
-- `PUT /physiology/{id}` — Partial update
-- `DELETE /physiology/{id}` — Delete
+### CRUD -- Physiology Logs (`/physiology`)
+Simulates periodized biometric testing (e.g., lab fitness tests or smartwatch baseline updates):
+- `POST /physiology/` -- Create (requires thresholds and JSON zones)
+- `GET /physiology/` -- List (filter by `pid`)
+- `GET /physiology/{id}` -- Get one
+- `PUT /physiology/{id}` -- Partial update
+- `DELETE /physiology/{id}` -- Delete
 
-### Analytics — Dashboard Endpoints (`/analytics`)
+### Analytics -- Dashboard Endpoints (`/analytics`)
 
-Chart-ready, strongly-typed endpoints designed for direct consumption by front-end dashboards (Vue/React + ECharts/Chart.js). Each endpoint returns a full Pydantic response model for clean Swagger documentation and TypeScript code-gen.
+Chart-ready, strongly-typed endpoints designed to offload grouping and computational math to the PostgreSQL layer.
 
-| Endpoint | Purpose | Key Output |
+| Endpoint | Purpose | Implemented Logic \& Principle |
 |---|---|---|
-| `GET /analytics/physiology/trends` | Line chart data + current status | VO2Max / RHR / fitness trends, threshold zones, race time predictions (5K/10K/HM) |
-| `GET /analytics/performance/records` | PR trophy display | Fixed-distance best times: Run 5K/10K/HM, Ride 10K/50K/100K (with anomaly filtering) |
-| `GET /analytics/training/status` | Calendar + bar/pie charts | Per-day load/distance, period totals, intensity distribution (Easy/Tempo/Hard) |
-| `GET /analytics/insights/environment` | Temperature impact analysis | Avg HR & pace across Cold (<10°C) / Moderate (10–22°C) / Hot (>22°C) |
-| `GET /analytics/insights/lifestyle` | Sleep & fatigue correlation | A/B comparison of performance with good vs poor sleep, high vs low fatigue |
+| `GET /analytics/physiology/trends` | Line chart data & Predictions | Uses the Daniels VO2-velocity formula combined with recent valid VO2Max logs to mathematically predict 5K/10K/HM limits utilizing sustained pacing ratios (~95% VO2 for 5k). |
+| `GET /analytics/performance/records` | PR trophy display | Queries fast completion times mapped to fixed distance buckets (Run: 5K/10K/HM). Strictly implements **anomaly filtering** to exclude GPS glitched pacing (e.g. discarding paces faster than 2:30/km). |
+| `GET /analytics/training/status` | Calendar & Load charts | Aggregates daily distance and computes intensity distribution buckets (Easy / Tempo / Hard) based on grouping HR thresholds dynamically. |
+| `GET /analytics/insights/environment` | Temperature impact | Applies SQLAlchemy `case()` statements to bucket activities into Cold (<$10^{\circ}$C), Moderate ($10-22^{\circ}$C), and Hot (>$22^{\circ}$C), computing SQL `func.avg()` HR per-bucket to illustrate cardiovascular drift. |
+| `GET /analytics/insights/lifestyle` | Sleep & fatigue correlation | Cross-references (`JOIN`) activities against `daily_metrics` utilizing date equivalence to compare pacing & HR directly against sleep tiers ($<$6h poor vs $>$7h good). |

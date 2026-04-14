@@ -76,7 +76,7 @@ class TestLogin:
     def test_login_success(self, client):
         """Login with correct credentials returns a JWT token."""
         self._register(client)
-        resp = client.post("/auth/login", json={
+        resp = client.post("/auth/login", data={
             "username": "testuser",
             "password": "testpass123",
         })
@@ -89,7 +89,7 @@ class TestLogin:
     def test_login_wrong_password(self, client):
         """Wrong password returns 401."""
         self._register(client)
-        resp = client.post("/auth/login", json={
+        resp = client.post("/auth/login", data={
             "username": "testuser",
             "password": "wrongpass",
         })
@@ -98,7 +98,7 @@ class TestLogin:
 
     def test_login_nonexistent_user(self, client):
         """Login with a username that doesn't exist returns 401."""
-        resp = client.post("/auth/login", json={
+        resp = client.post("/auth/login", data={
             "username": "nobody",
             "password": "whatever",
         })
@@ -117,7 +117,7 @@ class TestProtectedEndpoints:
             "username": username,
             "password": password,
         })
-        resp = client.post("/auth/login", json={
+        resp = client.post("/auth/login", data={
             "username": username,
             "password": password,
         })
@@ -136,14 +136,17 @@ class TestProtectedEndpoints:
 
     def test_me_without_token(self, client):
         """GET /auth/me without a token returns 401."""
+        client.headers.pop("Authorization", None)
         resp = client.get("/auth/me")
         assert resp.status_code == 401
 
     def test_me_with_invalid_token(self, client):
-        """GET /auth/me with a garbage token returns 401."""
-        resp = client.get("/auth/me", headers={
-            "Authorization": "Bearer totally.invalid.token",
-        })
+        """GET /auth/me with an invalid token returns 401."""
+        client.headers.pop("Authorization", None)
+        resp = client.get(
+            "/auth/me",
+            headers={"Authorization": "Bearer not.a.real.token"},
+        )
         assert resp.status_code == 401
 
 
@@ -159,7 +162,7 @@ class TestLogout:
             "username": username,
             "password": password,
         })
-        resp = client.post("/auth/login", json={
+        resp = client.post("/auth/login", data={
             "username": username,
             "password": password,
         })
@@ -200,7 +203,7 @@ class TestLogout:
         })
         assert resp.status_code == 401
         # Login again — new token works
-        resp = client.post("/auth/login", json={
+        resp = client.post("/auth/login", data={
             "username": "logoutuser",
             "password": "logoutpass123",
         })
@@ -214,6 +217,7 @@ class TestLogout:
         assert resp.json()["username"] == "logoutuser"
 
     def test_logout_without_token(self, client):
-        """Logout without a token returns 401."""
+        """Attempting to logout without a token returns 401."""
+        client.headers.pop("Authorization", None)
         resp = client.post("/auth/logout")
         assert resp.status_code == 401

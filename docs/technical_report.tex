@@ -137,27 +137,28 @@ app/
 
 Each router owns a single URL prefix and tag, keeping concerns isolated and enabling independent testing.
 
-\subsection{Data Pipeline Architecture}
+\subsection{Data Pipeline Architecture \& API Endpoints}
 
-Four standalone scripts in \texttt{scripts/} form a sequential ETL pipeline:
+The core data ingestion is handled through endpoints in the API and four standalone ETL scripts in \texttt{scripts/}:
 
 \begin{enumerate}[leftmargin=1.5em]
-  \item \textbf{import\_fit.py} --- Parse \texttt{.fit} binary files, extract session metadata and per-second time-series, insert into the \texttt{activities} table.
-  \item \textbf{enrich\_weather.py} --- Call the Open-Meteo Historical Weather API to backfill temperature, humidity, and air pressure for each GPS-tagged activity.
-  \item \textbf{seed\_daily\_metrics.py} --- Generate correlated simulated lifestyle data for every activity date.
-  \item \textbf{seed\_physiology.py} --- Generate bi-weekly physiological snapshots with cumulative fitness progression.
+  \item \textbf{File Uploads \& FIT Parsing (\texttt{/activities/upload}):} Rather than relying entirely on manual JSON entry, the API accepts binary \texttt{.fit} files (the standard used by Garmin, Coros, Wahoo) via \texttt{multipart/form-data}. The upload endpoint delegates parsing to the \texttt{fitdecode} library. It iterates through the file frames to extract bounding timestamps (start, end), total distance, elevation ascent/descent, and computes metrics like average pace or heart rate dynamically from the data stream. Finally, these parsed metrics are automatically mapped to the SQLAlchemy \texttt{Activity} ORM and inserted into the PostgreSQL database.
+  \item \textbf{RESTful Pagination \& Filtering (\texttt{/activities/} \& \texttt{/daily-metrics/}):} The list endpoints utilize query parameters (\texttt{skip}, \texttt{limit}, \texttt{date\_from}, \texttt{date\_to}, \texttt{pid}) to dynamically construct SQLAlchemy `.filter()` clauses. This pushes the filtering down to the database engine level (e.g., executing \texttt{WHERE user\_id = 1 AND start\_time >= '2025-01-01'}), preventing memory bloat by returning only the paginated slice of records requested.
+  \item \textbf{Composite-Key Updates (\texttt{PUT /daily-metrics/by-date}):} The Daily Metrics router implements an upsert/update strategy based on a composite business key (\texttt{pid} + \texttt{date}). This allows smart integrations (or frontend clients) to send a payload for ``today's stats'' without needing to perform a prior \texttt{GET} request to look up the database's internal row ID, significantly reducing network overhead.
+  \item \textbf{Data Enrichment Pipeline:} Supplemental standalone scripts execute batched background operations. \textbf{import\_fit.py} handles directory-wide ingestion. \textbf{enrich\_weather.py} calls the external Open-Meteo API using latitude/longitude extracted from activities to backfill missing environmental data. \textbf{seed\_daily\_metrics.py} \& \textbf{seed\_physiology.py} generate correlated simulated lifestyle data and physiological progressions (using sine-wave trending and randomized fatigue noise) to provide realistic sample testing datasets.
 \end{enumerate}
 
 All scripts use \textbf{batch commits} (configurable, default 30--50 records per flush) and \textbf{in-memory duplicate detection} (pre-loading existing keys into a \texttt{set()}) to minimize network round-trips when operating against a remote PostgreSQL instance.
 
 \subsection{Analytics Engine}
 
-The five analytics endpoints are designed as \textbf{pure SQL aggregations} wrapped in Pydantic response models:
+The five analytics endpoints (\texttt{/analytics/*}) are designed as \textbf{complex SQL aggregations} routed directly into Pydantic response models. By offloading computation to the database layer (PostgreSQL), the API minimizes memory usage. Key implementations include:
 
 \begin{itemize}[leftmargin=1.5em]
-  \item \textbf{Race Predictor} uses the Daniels VO2-velocity quadratic formula ($\mathrm{VO2} = -4.60 + 0.182258v + 0.000104v^2$) with calibrated sustainability factors derived from real-world performance data.
-  \item \textbf{Performance Records} track fixed-distance best times (Run: 5K / 10K / Half Marathon; Ride: 10K / 50K / 100K) with anomaly filtering that excludes paces outside physiologically plausible ranges ($<$ 2:30/km or $>$ 10:00/km for runs; $<$ 8 km/h or $>$ 70 km/h for rides).
-  \item \textbf{Environment \& Lifestyle insights} use bucketed aggregations (Cold / Moderate / Hot; Good / Poor sleep) to show correlations between external factors and running performance.
+  \item \textbf{Race Predictor / Physiology Trends:} Uses the Daniels VO2-velocity quadratic formula ($\mathrm{VO2} = -4.60 + 0.182258v + 0.000104v^2$) iteratively solved or derived. The algorithm is mapped in Python to convert the user's latest recorded \texttt{vo2\_max} logarithmically into sustainable pace forecasts for 5K, 10K, and Half Marathons. It uses calibrated sustainability factors (e.g., humans cannot indefinitely hold VO2Max; 5K pace operates at ~95\% VO2Max, HM at ~85\%).
+  \item \textbf{Performance Records (PR Filtering Engine):} Tracks fixed-distance best times by grouping and ranking activities. Crucially, the logic involves rigorous \textbf{anomaly filtering}. GPS errors frequently record impossible pacings. The logic excludes data outside physiologically plausible bounds ($<$ 2:30/km or $>$ 10:00/km for runs; $<$ 8 km/h or $>$ 70 km/h for rides).
+  \item \textbf{Environment Insights (Temperature Bucketing):} Utilizing SQLAlchemy's Conditional Expressions (\texttt{case} statements), weather data is bucketed dynamically. The query groups activities into three thermal constraints: Cold ($<10^\circ$C), Moderate ($10-22^\circ$C), and Hot ($>22^\circ$C). Averages for heart rate and speed are then computed \textit{per bucket} via \texttt{func.avg()}, mathematically illustrating the exact cardiovascular drift caused by extreme heat.
+  \item \textbf{Lifestyle Impact (Cross-Table Joins):} Correlates the \texttt{daily\_metrics} table (subjective fatigue, sleep hours) with the \texttt{activities} table (objective pace, heart rate). Utilizing SQL \texttt{JOIN} clauses on \texttt{date(start\_time) == date}, the endpoint categorizes performance against sleep states (e.g., comparing days with $>$7h sleep vs $<$6h sleep) to expose behavioral trends.
 \end{itemize}
 
 \subsection{Dual-Database Strategy}

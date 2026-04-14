@@ -68,6 +68,9 @@ def client(db_session):
     """
     FastAPI TestClient with the DB dependency overridden to use the
     in-memory test database instead of the production SQLite file.
+    
+    Automatically creates a demo user (pid=1) and attaches a JWT Bearer 
+    token so tests hitting protected endpoints pass smoothly.
     """
     def _override_get_db():
         try:
@@ -77,7 +80,21 @@ def client(db_session):
 
     app.dependency_overrides[get_db] = _override_get_db
     with TestClient(app) as c:
+        # 1. Create default user
+        from app.auth import hash_password
+        user = models.User(username="demo", hashed_password=hash_password("endurance2026"))
+        db_session.add(user)
+        db_session.commit()
+        db_session.refresh(user)
+        
+        # 2. Login to get token
+        resp = c.post("/auth/login", data={"username": "demo", "password": "endurance2026"})
+        if resp.status_code == 200:
+            token = resp.json()["access_token"]
+            c.headers.update({"Authorization": f"Bearer {token}"})
+            
         yield c
+        
     app.dependency_overrides.clear()
 
 

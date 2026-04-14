@@ -75,12 +75,6 @@ class TestListDailyMetrics:
         r = client.get("/daily-metrics/")
         assert len(r.json()) == 1
 
-    def test_filter_by_pid(self, client, sample_daily_metric):
-        r = client.get("/daily-metrics/?pid=1")
-        assert len(r.json()) == 1
-        r = client.get("/daily-metrics/?pid=999")
-        assert len(r.json()) == 0
-
     def test_filter_by_date_range(self, client, sample_daily_metric):
         r = client.get("/daily-metrics/?date_from=2024-06-01&date_to=2024-06-30")
         assert len(r.json()) == 1
@@ -132,7 +126,7 @@ class TestUpdateDailyMetricById:
 class TestUpdateDailyMetricByDate:
     def test_update_by_date_success(self, client, sample_daily_metric):
         r = client.put(
-            "/daily-metrics/by-date?pid=1&date=2024-06-15",
+            "/daily-metrics/by-date?date=2024-06-15",
             json={"sleep_hours": 9.5, "stress_level": 1},
         )
         assert r.status_code == 200
@@ -141,7 +135,7 @@ class TestUpdateDailyMetricByDate:
 
     def test_update_by_date_nonexistent_returns_404(self, client):
         r = client.put(
-            "/daily-metrics/by-date?pid=1&date=2099-01-01",
+            "/daily-metrics/by-date?date=2099-01-01",
             json={"sleep_hours": 7.0},
         )
         assert r.status_code == 404

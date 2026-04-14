@@ -134,12 +134,6 @@ class TestListActivities:
         assert r.status_code == 200
         assert len(r.json()) == 1
 
-    def test_filter_by_pid(self, client, sample_activity):
-        r = client.get("/activities/?pid=1")
-        assert len(r.json()) == 1
-        r = client.get("/activities/?pid=999")
-        assert len(r.json()) == 0
-
     def test_filter_by_type(self, client, sample_activity, sample_ride):
         r = client.get("/activities/?type=Run")
         assert len(r.json()) == 1

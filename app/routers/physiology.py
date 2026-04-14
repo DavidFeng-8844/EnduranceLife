@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 from typing import Optional
 
 from ..database import get_db
+from ..auth import get_current_user
 from .. import models, schemas
 
 router = APIRouter(prefix="/physiology", tags=["Physiology Logs"])
@@ -23,9 +24,12 @@ router = APIRouter(prefix="/physiology", tags=["Physiology Logs"])
 def create_physiology_log(
     payload: schemas.PhysiologyLogCreate,
     db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
 ):
     """Create a new physiology snapshot for a user on a given date."""
-    db_log = models.PhysiologyLog(**payload.model_dump())
+    payload_dump = payload.model_dump()
+    payload_dump["pid"] = current_user.id
+    db_log = models.PhysiologyLog(**payload_dump)
     db.add(db_log)
     db.commit()
     db.refresh(db_log)
@@ -37,15 +41,13 @@ def create_physiology_log(
 # ---------------------------------------------------------------------------
 @router.get("/", response_model=list[schemas.PhysiologyLogRead])
 def list_physiology_logs(
-    pid: Optional[int] = Query(None, description="Filter by user ID"),
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
     db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
 ):
-    """Retrieve physiology logs, optionally filtered by user."""
-    query = db.query(models.PhysiologyLog)
-    if pid is not None:
-        query = query.filter(models.PhysiologyLog.pid == pid)
+    """Retrieve physiology logs scaled to the currently authenticated user."""
+    query = db.query(models.PhysiologyLog).filter(models.PhysiologyLog.pid == current_user.id)
     return query.order_by(models.PhysiologyLog.date.desc()).offset(skip).limit(limit).all()
 
 
@@ -53,9 +55,16 @@ def list_physiology_logs(
 # READ (single)
 # ---------------------------------------------------------------------------
 @router.get("/{log_id}", response_model=schemas.PhysiologyLogRead)
-def get_physiology_log(log_id: int, db: Session = Depends(get_db)):
-    """Retrieve a single physiology log by primary key."""
-    log = db.query(models.PhysiologyLog).filter(models.PhysiologyLog.id == log_id).first()
+def get_physiology_log(
+    log_id: int, 
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    """Retrieve a single physiology log by primary key, scoped to current user."""
+    log = db.query(models.PhysiologyLog).filter(
+        models.PhysiologyLog.id == log_id,
+        models.PhysiologyLog.pid == current_user.id
+    ).first()
     if not log:
         raise HTTPException(status_code=404, detail="PhysiologyLog not found")
     return log
@@ -69,9 +78,13 @@ def update_physiology_log(
     log_id: int,
     payload: schemas.PhysiologyLogUpdate,
     db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
 ):
     """Partially update an existing physiology log."""
-    log = db.query(models.PhysiologyLog).filter(models.PhysiologyLog.id == log_id).first()
+    log = db.query(models.PhysiologyLog).filter(
+        models.PhysiologyLog.id == log_id,
+        models.PhysiologyLog.pid == current_user.id
+    ).first()
     if not log:
         raise HTTPException(status_code=404, detail="PhysiologyLog not found")
 
@@ -88,9 +101,16 @@ def update_physiology_log(
 # DELETE
 # ---------------------------------------------------------------------------
 @router.delete("/{log_id}", status_code=204)
-def delete_physiology_log(log_id: int, db: Session = Depends(get_db)):
+def delete_physiology_log(
+    log_id: int, 
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
     """Delete a physiology log. Returns 204 No Content on success."""
-    log = db.query(models.PhysiologyLog).filter(models.PhysiologyLog.id == log_id).first()
+    log = db.query(models.PhysiologyLog).filter(
+        models.PhysiologyLog.id == log_id,
+        models.PhysiologyLog.pid == current_user.id
+    ).first()
     if not log:
         raise HTTPException(status_code=404, detail="PhysiologyLog not found")
     db.delete(log)
