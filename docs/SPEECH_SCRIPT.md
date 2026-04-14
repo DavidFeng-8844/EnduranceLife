@@ -58,17 +58,29 @@ Finally, utilizing advanced SQL `CASE` and `JOIN` expressions, the system automa
 
 ---
 
-## Slide 6: Cloud Deployment & Evidence
-*(3:45 - 4:15)*
+## Slide 6: Development Practices & Version Control
+*(3:15 - 3:45)*
 
-"As proof of a successful DevOps pipeline, the entire EnduranceLife API is currently live in a production environment on Render. 
-
-The application is securely connected to a persistent, managed PostgreSQL instance shown here on the left. On the right, you can see live server logs and the functional Swagger UI. To ensure this demo remains robust, I engineered an automatic Start Command that dynamically reseeds the PostgreSQL database with historical metadata in the event of an ephemeral server reset."
+"Throughout development, I maintained rigorous version control using Git and GitHub, ensuring a clean commit history that tracks the evolution from local SQLite prototypes to full cloud deployment. Our API documentation strategy leverages FastAPI's dynamic Swagger UI for real-time testing, while also extracting standard ReDoc specifications for offline evaluation."
 
 ---
 
-## Slide 7: Security, Testing & Demo Transition
-*(4:15 - 5:00)*
+## Slide 7: Deliverables & Technical Report
+*(3:45 - 4:15)*
+
+"For the final deliverables, you will find the complete open-source codebase on GitHub, the live hosted Swagger docs, and a comprehensive Technical Report detailing my design choices—including our Dual-Database strategy and an Appendix exploring how Generative AI accelerated algorithm calibration."
+
+---
+
+## Slide 8: Cloud Deployment & Evidence
+*(4:15 - 4:40)*
+
+"As proof of a successful DevOps pipeline, the entire API is currently live on Render. The application is securely connected to a persistent PostgreSQL instance. To ensure this demo remains robust independently, I engineered an automatic Start Command that dynamically reseeds the database with historical data upon reset."
+
+---
+
+## Slide 9: Security, Testing & Demo Transition
+*(4:40 - 5:00)*
 
 "Lastly, dealing with personal health data requires exceptional security. 
 
@@ -81,4 +93,4 @@ I've ensured the stability of this logic with a comprehensive test suite of **77
 That concludes the architecture overview. I'd now like to pivot and show you a very brief live demonstration of the Swagger UI where we can see these systems in action..." 
 
 *(5:00)* 
-*(Begin your 15-30 second demo of logging in and fetching the Analytics Trends, keeping Slide 8: References visible during the Q&A session as your backdrop).*
+*(Begin your 15-30 second demo of logging in and fetching the Analytics Trends, keeping Slide 10: References visible during the Q&A session as your backdrop).*

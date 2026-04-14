@@ -106,7 +106,42 @@
     \end{itemize}
 \end{frame}
 
-% Slide 6: Cloud Deployment & Evidence
+% Slide 6: Development Practices & Documentation
+\begin{frame}{Development Practices \& Version Control}
+    \textbf{Version Control \& Repository Management}
+    \begin{itemize}
+        \item \textbf{Git / GitHub:} Project maintained via strict version control using standardized commit messages (\textit{e.g., ``feat: IDOR prevention'', ``fix: route conflict''}).
+        \item Iterative historical log tracks the system's evolution from a bare-bones SQLite setup to a fully cloud-deployed PostgreSQL environment.
+    \end{itemize}
+
+    \vspace{0.3cm}
+    \textbf{API Documentation Strategy}
+    \begin{itemize}
+        \item Complete OpenAPI spec dynamically generated via \textbf{FastAPI / Swagger UI}.
+        \item \textbf{Interactive Swagger:} Enables real-time browser testing, embedded \texttt{Bearer Token} injection, and direct endpoint manipulation.
+        \item \textbf{ReDoc Extraction:} Exported to a static PDF (\texttt{api\_documentation.pdf}) for offline evaluation and grading reference.
+    \end{itemize}
+\end{frame}
+
+% Slide 7: Deliverables & Technical Report
+\begin{frame}{Deliverables \& Report Highlights}
+    \textbf{Submission Deliverables Overview}
+    \begin{itemize}
+        \item \textbf{GitHub Repository:} Full Python source code, CI/CD scripts, and test suite.
+        \item \textbf{API Documentation:} Hosted live and available via \texttt{docs/api\_documentation.pdf}.
+        \item \textbf{Technical Report:} Deep-dive architectural review.
+    \end{itemize}
+
+    \vspace{0.3cm}
+    \textbf{Technical Report Highlights}
+    \begin{itemize}
+        \item \textbf{Design Choices:} Dual SQLite/Postgres strategy to balance local dev-speed with cloud persistence.
+        \item \textbf{Zero-Trust Security:} Explanation of the global \texttt{Depends(get\_current\_user)} implementation preventing IDOR.
+        \item \textbf{Generative AI Appendix:} Comprehensive disclosure on how tools like Gemini accelerated algorithm calibration and boilerplate generation, along with full conversational logs.
+    \end{itemize}
+\end{frame}
+
+% Slide 8: Cloud Deployment & Evidence
 \begin{frame}{Live Cloud Deployment Evidence}
     \textbf{Persistent PostgreSQL backend on Render}
     
@@ -126,7 +161,7 @@
     \end{columns}
 \end{frame}
 
-% Slide 7: Security, Testing & Demo
+% Slide 9: Security, Testing & Demo
 \begin{frame}{Security \& Quality Assurance (Demo transition)}
     \textbf{Zero-Trust IDOR Prevention}
     \begin{itemize}
@@ -147,7 +182,7 @@
     \end{center}
 \end{frame}
 
-% Slide 8: References
+% Slide 10: References
 \begin{frame}{References \& Datasets}
     \textbf{Libraries \& Frameworks}
     \begin{itemize}
