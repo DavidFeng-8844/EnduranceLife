@@ -81,4 +81,4 @@ I've ensured the stability of this logic with a comprehensive test suite of **77
 That concludes the architecture overview. I'd now like to pivot and show you a very brief live demonstration of the Swagger UI where we can see these systems in action..." 
 
 *(5:00)* 
-*(Begin your 15-30 second demo of logging in and fetching the Analytics Trends)*
+*(Begin your 15-30 second demo of logging in and fetching the Analytics Trends, keeping Slide 8: References visible during the Q&A session as your backdrop).*

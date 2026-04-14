@@ -333,4 +333,23 @@ The successfully deployed endpoints can be explored live via the Swagger UI inte
 
 EnduranceLife demonstrates a complete RESTful API lifecycle: domain modelling, CRUD operations, file upload handling, external API integration, analytics computation, comprehensive testing, and cloud deployment. The technology choices --- Python, FastAPI, SQLAlchemy, PostgreSQL --- form a cohesive stack that balances development speed with production readiness. The dual-database strategy and batch-optimized data pipelines address the practical challenges of deploying a data-intensive application to a free-tier cloud platform.
 
+% ══════════════════════════════════════════════════════════════════════════
+\section{References}
+% ══════════════════════════════════════════════════════════════════════════
+
+\begin{itemize}[leftmargin=1.5em]
+    \item \textbf{Core Frameworks:} FastAPI (\url{https://fastapi.tiangolo.com/}), Pydantic V2, and SQLAlchemy ORM.
+    \item \textbf{Libraries utilized:} \texttt{fitdecode} for binary parsing of smartwatch workouts; \texttt{passlib} and \texttt{python-jose} for JWT generation and bcrypt password hashing.
+    \item \textbf{External APIs \& Datasets:}
+    \begin{itemize}[label=$\circ$]
+        \item Open-Meteo Historical Weather API (\url{https://open-meteo.com/}) utilized in \texttt{enrich\_weather.py} to backfill environmental context.
+        \item Native Coros smartwatch \texttt{.fit} export files (personal dataset) utilized as the seed data payload.
+    \end{itemize}
+    \item \textbf{Theory \& Tutorials:}
+    \begin{itemize}[label=$\circ$]
+        \item \textit{Daniels' Running Formula} by Jack Daniels (mathematical basis utilized in \texttt{analytics.py} to compute sustainable continuous fractional VO2 velocity predicts).
+        \item Render.com deployment specifications and cloud PostgreSQL connection tutorials (\url{https://render.com/docs}).
+    \end{itemize}
+\end{itemize}
+
 \end{document}
