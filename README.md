@@ -18,9 +18,11 @@ The API is fully deployed on the Render cloud, powered by a persistent PostgreSQ
 | API Documentation (ReDoc export) | [`docs/api_documentation.pdf`](docs/api_documentation.pdf) |
 
 > **🔑 Examiner Demo Login**: 
-> The cloud database is pre-seeded with realistic lifetime training data (activities, PRs, body metrics). To fully explore the secure endpoints, click the **Authorize** lock icon in Swagger and use:
+> The cloud database is pre-seeded with realistic lifetime training data (activities, PRs, body metrics). To fully explore the secure endpoints, click the global **Authorize 🔒** button at the top-right of the Swagger page and use:
 > - **Username**: `demo`
 > - **Password**: `endurance2026`
+> 
+> *(Testing Tip: Always use the green Authorize button to log in instead of manually testing the `POST /auth/login` endpoint block. The Authorize button automatically stores the stateless JWT Bearer Token in memory and seamlessly injects it into all future requests.)*
 
 ### Proof of Deployment
 Below is the evidence of the API successfully operating in the Render cloud production environment alongside its connected PostgreSQL instance:
