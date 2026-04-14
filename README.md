@@ -15,6 +15,7 @@ The API is fully deployed on the Render cloud, powered by a persistent PostgreSQ
 | **Live Swagger UI** | **[https://endurancelife.onrender.com/docs](https://endurancelife.onrender.com/docs)** |
 | **Live ReDoc** | **[https://endurancelife.onrender.com/redoc](https://endurancelife.onrender.com/redoc)** |
 | Technical Report | [`docs/technical_report.pdf`](docs/technical_report.pdf) |
+| API Documentation (ReDoc export) | [`docs/api_documentation.pdf`](docs/api_documentation.pdf) |
 
 > **🔑 Examiner Demo Login**: 
 > The cloud database is pre-seeded with realistic lifetime training data (activities, PRs, body metrics). To fully explore the secure endpoints, click the **Authorize** lock icon in Swagger and use:
