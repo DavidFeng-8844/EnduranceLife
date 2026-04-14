@@ -199,6 +199,11 @@ python -m scripts.seed_physiology --pid 2
 ## API Endpoints
 
 ### Authentication (`/auth`)
+
+> **Demo User (pid=1)**: The database is pre-populated with realistic lifetime training data (activities, PRs, physiology updates) linked to `pid=1`. For testing and grading, log in with these credentials to access the populated dashboard data:
+> - **Username**: `demo`
+> - **Password**: `endurance2026`
+
 - `POST /auth/register` -- Create a new user (username + password, 409 on duplicate)
 - `POST /auth/login` -- Authenticate and receive a JWT Bearer token (30 min expiry)
 - `POST /auth/logout` -- Invalidate the current token (requires auth)

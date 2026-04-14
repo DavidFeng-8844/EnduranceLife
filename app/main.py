@@ -20,7 +20,24 @@ from .routers import activity, daily_metric, physiology, analytics, auth
 # Create tables — idempotent; safe to call on every startup.
 # In production, replace with Alembic migrations for schema versioning.
 # ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Create tables and inject default demo user (pid=1)
+# ---------------------------------------------------------------------------
 Base.metadata.create_all(bind=engine)
+
+from sqlalchemy.orm import Session
+from .models import User
+from .auth import hash_password
+
+with Session(engine) as db:
+    # If no users exist, seed the default demo user to ensure it gets id=1
+    if not db.query(User).first():
+        demo_user = User(
+            username="demo",
+            hashed_password=hash_password("endurance2026")
+        )
+        db.add(demo_user)
+        db.commit()
 
 # ---------------------------------------------------------------------------
 # FastAPI application instance
