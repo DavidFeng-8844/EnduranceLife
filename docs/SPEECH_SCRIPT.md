@@ -58,39 +58,54 @@ Finally, utilizing advanced SQL `CASE` and `JOIN` expressions, the system automa
 
 ---
 
-## Slide 6: Development Practices & Version Control
-*(3:15 - 3:45)*
+---
 
-"Throughout development, I maintained rigorous version control using Git and GitHub, ensuring a clean commit history that tracks the evolution from local SQLite prototypes to full cloud deployment. Our API documentation strategy leverages FastAPI's dynamic Swagger UI for real-time testing, while also extracting standard ReDoc specifications for offline evaluation."
+## Slide 6: Version Control Practices
+*(3:00 - 3:20)*
+
+"Throughout development, I maintained rigorous version control using Git and GitHub. I utilized a standardized commit methodology—using prefixes like 'feat', 'fix', and 'refactor'—ensuring a clean, professional history that tracks the evolution from local prototypes to full cloud deployment."
 
 ---
 
-## Slide 7: Deliverables & Technical Report
-*(3:45 - 4:15)*
+## Slide 7: API Documentation Overview
+*(3:20 - 3:45)*
 
-"For the final deliverables, you will find the complete open-source codebase on GitHub, the live hosted Swagger docs, and a comprehensive Technical Report detailing my design choices—including our Dual-Database strategy and an Appendix exploring how Generative AI accelerated algorithm calibration."
+"Documentation is a core project deliverable. The API features a fully interactive Swagger UI that allows for real-time endpoint testing and JWT token injection. Additionally, I’ve provided a static ReDoc-extracted PDF for offline evaluation, ensuring the specification is accessible even without a live server connection."
 
 ---
 
-## Slide 8: Cloud Deployment & Evidence
-*(4:15 - 4:40)*
+## Slide 8: Technical Report Highlights
+*(3:45 - 4:10)*
+
+"My Technical Report dives deep into the architectural trade-offs. Highlights include the dual-database switching logic, the zero-trust data isolation strategy, and a critical reflection on how I used Generative AI to accelerate complex algorithm calibration and boilerplate generation."
+
+---
+
+## Slide 9: Project Deliverables
+*(4:10 - 4:30)*
+
+"To recap, my submission includes the complete Python source code on GitHub, a 77-case automated test suite, live and static API documentation, and the comprehensive 10-page Technical Report you have on your screen."
+
+---
+
+## Slide 10: Cloud Deployment & Evidence
+*(4:30 - 4:45)*
 
 "As proof of a successful DevOps pipeline, the entire API is currently live on Render. The application is securely connected to a persistent PostgreSQL instance. To ensure this demo remains robust independently, I engineered an automatic Start Command that dynamically reseeds the database with historical data upon reset."
 
 ---
 
-## Slide 9: Security, Testing & Demo Transition
-*(4:40 - 5:00)*
+## Slide 11: Security, Testing & Demo Transition
+*(4:45 - 5:00)*
 
 "Lastly, dealing with personal health data requires exceptional security. 
 
-EnduranceLife is protected by a JSON Web Token (JWT) architecture. More importantly, I engineered a **Zero-Trust Data Isolation mechanism**. To protect against IDOR vulnerabilities, the system ignores any User IDs sent by the client. Every single database transaction is strictly mapped to the cryptographic token held by the current user.
-
-I've ensured the stability of this logic with a comprehensive test suite of **77 automated pytest cases** that run entirely in-memory, achieving robust coverage against edge cases.
+EnduranceLife is protected by a JWT architecture and a Zero-Trust isolation mechanism that prevents IDOR. I’ve ensured the stability of this logic with 77 automated pytest cases.
 
 *(Pause briefly, switch context to browser)*
 
-That concludes the architecture overview. I'd now like to pivot and show you a very brief live demonstration of the Swagger UI where we can see these systems in action..." 
+That concludes the architecture overview. I'd now like to pivot and show you a very brief live demonstration of the Swagger UI..." 
 
 *(5:00)* 
-*(Begin your 15-30 second demo of logging in and fetching the Analytics Trends, keeping Slide 10: References visible during the Q&A session as your backdrop).*
+*(Begin your 15-30 second demo of logging in and fetching the Analytics Trends, keeping Slide 12: References visible during the Q&A session as your backdrop).*
+

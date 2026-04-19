@@ -106,42 +106,53 @@
     \end{itemize}
 \end{frame}
 
-% Slide 6: Development Practices & Documentation
-\begin{frame}{Development Practices \& Version Control}
-    \textbf{Version Control \& Repository Management}
+% Slide 6: Version Control Practices
+\begin{frame}{Version Control Practices}
+    \textbf{Commit History \& Methodology}
     \begin{itemize}
-        \item \textbf{Git / GitHub:} Project maintained via strict version control using standardized commit messages (\textit{e.g., ``feat: IDOR prevention'', ``fix: route conflict''}).
-        \item Iterative historical log tracks the system's evolution from a bare-bones SQLite setup to a fully cloud-deployed PostgreSQL environment.
+        \item \textbf{Standardized Commit Messages}: Used clear prefixes (\texttt{feat}, \texttt{fix}, \texttt{docs}, \texttt{refactor}) to maintain a readable and professional history.
+        \item \textbf{Atomic Commits}: Each change represents a single logical unit of work (e.g., "feat: IDOR prevention in analytics").
+        \item \textbf{Evolutionary Path}: Repository history clearly demonstrates the migration from local SQLite prototypes to multi-user cloud-scale PostgreSQL architecture.
     \end{itemize}
+    \begin{center}
+        \fbox{\texttt{git log --oneline}} $\rightarrow$ \textit{Clean, linear history maintained on GitHub.}
+    \end{center}
+\end{frame}
 
-    \vspace{0.3cm}
-    \textbf{API Documentation Strategy}
+% Slide 7: API Documentation Overview
+\begin{frame}{API Documentation Overview}
+    \textbf{Dynamic \& Interactive Specifications}
     \begin{itemize}
-        \item Complete OpenAPI spec dynamically generated via \textbf{FastAPI / Swagger UI}.
-        \item \textbf{Interactive Swagger:} Enables real-time browser testing, embedded \texttt{Bearer Token} injection, and direct endpoint manipulation.
-        \item \textbf{ReDoc Extraction:} Exported to a static PDF (\texttt{api\_documentation.pdf}) for offline evaluation and grading reference.
+        \item \textbf{OpenAPI Specification}: Automatically generated via FastAPI's native metadata integration.
+        \item \textbf{Swagger UI}: Interactive playground available at \texttt{/docs} for real-time endpoint testing and JWT Bearer token injection.
+        \item \textbf{ReDoc Integration}: High-performance, clean documentation view at \texttt{/redoc} for complex schema navigation.
+        \item \textbf{Offline Export}: Extracted reference PDF (\texttt{api\_documentation.pdf}) provided for static evaluation.
     \end{itemize}
 \end{frame}
 
-% Slide 7: Deliverables & Technical Report
-\begin{frame}{Deliverables \& Report Highlights}
-    \textbf{Submission Deliverables Overview}
+% Slide 8: Technical Report Highlights
+\begin{frame}{Technical Report Highlights}
+    \textbf{Core Architectural Design Choices}
     \begin{itemize}
-        \item \textbf{GitHub Repository:} Full Python source code, CI/CD scripts, and test suite.
-        \item \textbf{API Documentation:} Hosted live and available via \texttt{docs/api\_documentation.pdf}.
-        \item \textbf{Technical Report:} Deep-dive architectural review.
-    \end{itemize}
-
-    \vspace{0.3cm}
-    \textbf{Technical Report Highlights}
-    \begin{itemize}
-        \item \textbf{Design Choices:} Dual SQLite/Postgres strategy to balance local dev-speed with cloud persistence.
-        \item \textbf{Zero-Trust Security:} Explanation of the global \texttt{Depends(get\_current\_user)} implementation preventing IDOR.
-        \item \textbf{Generative AI Appendix:} Comprehensive disclosure on how tools like Gemini accelerated algorithm calibration and boilerplate generation, along with full conversational logs.
+        \item \textbf{Dual-Database Strategy}: Seamless interface switching between SQLite (speed for CI/CD/testing) and PostgreSQL (production persistence).
+        \item \textbf{Internal Data Isolator}: Zero-Trust implementation that prevents IDOR by stripping \texttt{pid} from queries and resolving it via JWT subject.
+        \item \textbf{Analytics Computation}: Offloaded complex marathon-pacing and weather-trend math to the SQL engine via SQLAlchemy.
+        \item \textbf{Appendix}: Full Generative AI disclosure, critical reflection on AI-generated artifacts, and conversational logs.
     \end{itemize}
 \end{frame}
 
-% Slide 8: Cloud Deployment & Evidence
+% Slide 9: Project Deliverables
+\begin{frame}{Project Deliverables}
+    \textbf{Comprehensive Submission Package}
+    \begin{itemize}
+        \item \textbf{Code Repository}: Full Python source code, Pytest suite (77 cases), and production-ready startup scripts on GitHub.
+        \item \textbf{API Documentation}: Live hosted Swagger interface + exported static PDF.
+        \item \textbf{Technical Report}: 10-page deep-dive PDF covering design, testing, security, and AI usage.
+        \item \textbf{Evidence of Deployment}: Live instance running on Render cloud with persistent backend.
+    \end{itemize}
+\end{frame}
+
+% Slide 10: Cloud Deployment & Evidence
 \begin{frame}{Live Cloud Deployment Evidence}
     \textbf{Persistent PostgreSQL backend on Render}
     
@@ -161,7 +172,7 @@
     \end{columns}
 \end{frame}
 
-% Slide 9: Security, Testing & Demo
+% Slide 11: Security, Testing & Demo
 \begin{frame}{Security \& Quality Assurance (Demo transition)}
     \textbf{Zero-Trust IDOR Prevention}
     \begin{itemize}
@@ -182,7 +193,7 @@
     \end{center}
 \end{frame}
 
-% Slide 10: References
+% Slide 12: References
 \begin{frame}{References \& Datasets}
     \textbf{Libraries \& Frameworks}
     \begin{itemize}
