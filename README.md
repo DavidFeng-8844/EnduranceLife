@@ -9,6 +9,7 @@ A robust RESTful API for managing endurance-sport training data, daily nutrition
 ## 🚀 Live Demo & Documentation
 
 The API is fully deployed on the Render cloud, powered by a persistent PostgreSQL database. 
+Render.com free tier web services typically take 30 to 60 seconds to wake up from a cold start.
 
 | Resource | Link |
 |---|---|
