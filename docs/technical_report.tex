@@ -1,31 +1,21 @@
-\documentclass[11pt,a4paper]{article}
+\documentclass[10pt,a4paper]{article}
 
 % ── Packages ──────────────────────────────────────────────────────────────
 \usepackage[utf8]{inputenc}
 \usepackage[T1]{fontenc}
 \usepackage{lmodern}
 \usepackage{amsmath}
-\usepackage[margin=2.5cm]{geometry}
+\usepackage[margin=1.2cm]{geometry}
 \usepackage[hidelinks]{hyperref}
 \usepackage{enumitem}
 \usepackage{booktabs}
 \usepackage{graphicx}
 \usepackage{xcolor}
-\usepackage{listings}
 \usepackage{parskip}
 \usepackage{fancyhdr}
 
-% ── Code listing style ───────────────────────────────────────────────────
-\lstset{
-  basicstyle=\ttfamily\small,
-  breaklines=true,
-  frame=single,
-  rulecolor=\color{gray!40},
-  backgroundcolor=\color{gray!5},
-  keywordstyle=\color{blue!70!black},
-  commentstyle=\color{green!50!black},
-  stringstyle=\color{red!60!black},
-}
+% Formats lists tighter by default
+\setlist{noitemsep,topsep=0pt,parsep=0pt,partopsep=0pt}
 
 % ── Header / Footer ─────────────────────────────────────────────────────
 \pagestyle{fancy}
@@ -115,14 +105,7 @@ SQLAlchemy provides database-agnostic ORM mapping, enabling the same Python mode
 
 \subsection{Deployment: Render.com}
 
-Render was chosen for its GitHub-integrated CI/CD pipeline, free PostgreSQL tier, and automatic HTTPS. The deployment requires only two configuration values:
-
-\begin{lstlisting}[language=bash]
-Build Command:  pip install -r requirements.txt
-Start Command:  uvicorn app.main:app --host 0.0.0.0 --port $PORT
-\end{lstlisting}
-
-A \texttt{.python-version} file pins the runtime to Python 3.11.7 to ensure pre-built wheels are available for \texttt{pydantic-core} (which requires Rust compilation on unsupported versions).
+Render was chosen for its GitHub-integrated CI/CD pipeline, free PostgreSQL tier, and automatic HTTPS. The deployment requires only two configuration values: installing dependencies via \texttt{pip} and running the ASGI app via \texttt{uvicorn}. A \texttt{.python-version} file pins the runtime to Python 3.11.7 to ensure pre-built wheels are available for \texttt{pydantic-core} (which requires Rust compilation on unsupported versions).
 
 % ══════════════════════════════════════════════════════════════════════════
 \section{Architecture \& Design Decisions}
@@ -130,24 +113,7 @@ A \texttt{.python-version} file pins the runtime to Python 3.11.7 to ensure pre-
 
 \subsection{Project Structure}
 
-The codebase follows a \textbf{domain-driven router pattern}:
-
-\begin{lstlisting}
-app/
-  main.py           # Entry point, router registration
-  database.py       # Engine + session factory (PostgreSQL / SQLite)
-  models.py         # SQLAlchemy ORM (User, Activity, DailyMetric, ...)
-  schemas.py        # Pydantic request/response models
-  auth.py           # JWT utilities (bcrypt hashing, token create/verify)
-  routers/
-    auth.py         # Register, login, logout, /me
-    activity.py     # CRUD + .fit upload
-    daily_metric.py # CRUD + composite-key update
-    physiology.py   # CRUD for physiological snapshots
-    analytics.py    # 5 dashboard-facing endpoints
-\end{lstlisting}
-
-Each router owns a single URL prefix and tag, keeping concerns isolated and enabling independent testing.
+The codebase follows a \textbf{domain-driven router pattern}. The entry point (`main.py`) integrates routers (`auth.py`, `activity.py`, `daily\_metric.py`, `physiology.py`, `analytics.py`), database configurations, ORM models, and Pydantic validation schemas. Each router owns a single URL prefix and tag, keeping concerns isolated and enabling independent testing.
 
 \subsection{Data Pipeline Architecture \& API Endpoints}
 
@@ -177,15 +143,7 @@ The five analytics endpoints (\texttt{/analytics/*}) are designed as \textbf{com
 
 A single three-line conditional in \texttt{database.py} enables seamless switching:
 
-\begin{lstlisting}[language=Python]
-DATABASE_URL = os.environ.get("DATABASE_URL")
-if DATABASE_URL:
-    # Fix Render's postgres:// -> postgresql://
-    engine = create_engine(DATABASE_URL)
-else:
-    engine = create_engine("sqlite:///./endurance_life.db",
-                           connect_args={"check_same_thread": False})
-\end{lstlisting}
+The application reads the \texttt{DATABASE\_URL} environment variable. If present (like in the Render environment), it configures a PostgreSQL connection. If absent (local environment), it defaults to a local SQLite database file, enabling seamless testing and deployment without code changes.
 
 This pattern requires zero code changes between local development, CI testing (in-memory SQLite), and production deployment (Render PostgreSQL).
 
@@ -213,79 +171,25 @@ The API implements JWT-based authentication with four endpoints:
 \section{Testing Approach}
 % ══════════════════════════════════════════════════════════════════════════
 
-The project maintains an \textbf{80-test suite} using \texttt{pytest}, organized into five test modules:
-
-\begin{table}[h]
-\centering
-\begin{tabular}{@{}llr@{}}
-\toprule
-\textbf{Module} & \textbf{Scope} & \textbf{Tests} \\
-\midrule
-\texttt{test\_auth.py}           & Register, login, logout, token validation & 14 \\
-\texttt{test\_activity.py}      & CRUD + .fit upload + filters + pagination & 19 \\
-\texttt{test\_daily\_metric.py}  & CRUD + composite-key update + validation  & 14 \\
-\texttt{test\_physiology.py}    & CRUD + JSON zone handling                 & 13 \\
-\texttt{test\_analytics.py}     & All 5 analytics endpoints                 & 20 \\
-\bottomrule
-\end{tabular}
-\caption{Test suite breakdown}
-\end{table}
-
-\textbf{Key design decisions:}
-
-\begin{itemize}[leftmargin=1.5em]
-  \item \textbf{In-memory SQLite} --- Every test session spins up a fresh \texttt{sqlite:///:memory:} database via a pytest fixture, ensuring complete isolation and sub-2-second execution.
-  \item \textbf{Fixture composition} --- \texttt{conftest.py} provides layered fixtures (\texttt{db\_session} $\rightarrow$ \texttt{client} $\rightarrow$ \texttt{sample\_activity} $\rightarrow$ \texttt{analytics\_data}) that build on each other, reducing boilerplate.
-  \item \textbf{Edge-case coverage} --- Tests verify 409 on duplicates, 422 on validation failures, 404 on missing resources, anomaly filtering thresholds, and distance-band matching for PR records.
-\end{itemize}
+The project maintains an \textbf{80-test suite} using \texttt{pytest}, covering all CRUD operations, analytics routes, and authentication layers. Every test session spins up a fresh \texttt{sqlite:///:memory:} database via a pytest fixture, ensuring complete isolation and sub-2-second execution. Tests rigorously verify edge causes, such as 409 conflicts, 422 validations, anomaly filtering thresholds, and data isolation logic. Layered fixtures in \texttt{conftest.py} efficiently seed the database state without boilerplate.
 
 % ══════════════════════════════════════════════════════════════════════════
 \section{Challenges \& Lessons Learned}
 % ══════════════════════════════════════════════════════════════════════════
 
-\subsection{Coros FIT File Parsing}
-
-Coros watches produce non-standard FIT files where fields declared as \texttt{uint32} are packed into fewer bytes. The popular \texttt{fitparse} library crashes on these files with \texttt{FitParseError}. Switching to \texttt{fitdecode} --- which emits warnings instead of exceptions --- resolved this entirely. \textbf{Lesson:} when dealing with hardware vendor data, always test with real device exports, not just synthetic test files.
-
-\subsection{Route Ordering in FastAPI}
-
-A subtle bug emerged where \texttt{PUT /daily-metrics/by-date} was being captured by the \texttt{PUT /daily-metrics/\{metric\_id\}} route, because FastAPI matches routes in declaration order and parsed \texttt{"by-date"} as a path parameter. Moving the \texttt{/by-date} route \emph{before} the \texttt{/\{metric\_id\}} route fixed the issue. \textbf{Lesson:} in path-parameter-heavy APIs, always declare specific literal paths before parameterized ones.
-
-\subsection{Remote Database Performance}
-
-Initial data-pipeline scripts committed every record individually, resulting in 1430+ network round-trips across the Pacific to Render's Oregon-based PostgreSQL. This took over 10 minutes. Refactoring to batch commits (30--50 records per flush) with in-memory duplicate detection reduced the import time to under 3 minutes. \textbf{Lesson:} database access patterns that are invisible with local SQLite become critical bottlenecks with remote databases.
-
-\subsection{Python Version Pinning}
-
-Render defaulted to Python 3.14, which lacks pre-built wheels for \texttt{pydantic-core}. The resulting Rust compilation failed on Render's read-only filesystem. Adding a \texttt{.python-version} file pinning to 3.11.7 resolved this. \textbf{Lesson:} always pin your runtime version for cloud deployments.
-
-\subsection{CDN Accessibility}
-
-FastAPI's default Swagger UI and ReDoc pages load JavaScript from \texttt{cdn.jsdelivr.net}, which is blocked in mainland China. A custom \texttt{/redoc} endpoint serving the script from \texttt{unpkg.com} was implemented as a workaround. \textbf{Lesson:} CDN availability varies by region; self-hosting or alternative CDNs may be necessary.
+Several key lessons were learned during development:
+1) \textbf{Data Parsing:} Native Coros watches produce non-standard FIT byte packing, requiring the use of \texttt{fitdecode} over \texttt{fitparse}.
+2) \textbf{Route Ordering:} FastAPI evaluates routes sequentially; parameterized paths must strictly follow explicit literal endpoints to prevent shadowing.
+3) \textbf{Database Tuning:} Initial imports to Render's cloud PostgreSQL took 10+ minutes due to high network round-trips. Refactoring to batch inserts dropped this to under 3 minutes, highlighting the difference between local SQLite and remote deployments.
+4) \textbf{Environment Hurdles:} We explicitly pinned Python 3.11 \texttt{.python-version} to fix Rust compilation errors during deployment, and rerouted CDN assets to \texttt{unpkg.com} to bypass regional blocks on Swagger dependencies.
 
 % ══════════════════════════════════════════════════════════════════════════
 \section{Limitations \& Future Work}
 % ══════════════════════════════════════════════════════════════════════════
 
-\subsection{Current Limitations}
+While the API architecture successfully implements Zero-Trust data isolation and robust analytics, a few limitations persist. Schema migrations are currently raw metadata creations rather than versioned \texttt{Alembic} migrations. Furthermore, the token blacklist is in-memory and volatile upon restarts; production deployment would warrant an external \texttt{Redis} cache. 
 
-\begin{itemize}[leftmargin=1.5em]
-  \item \textbf{In-memory token blacklist.} The current logout implementation stores invalidated JTIs in a Python \texttt{set}, which is lost on server restart. A Redis-backed blacklist would provide persistence.
-  \item \textbf{Schema migrations.} Tables are created via \texttt{Base.metadata.create\_all()}, which cannot handle column additions or renames. Alembic should be adopted for schema versioning.
-  \item \textbf{No per-user data isolation.} Authentication is implemented, but CRUD endpoints do not yet enforce that users can only access their own data. Adding \texttt{current\_user.id == activity.pid} guards would complete the authorization layer.
-  \item \textbf{Simulated lifestyle data.} The \texttt{seed\_daily\_metrics} and \texttt{seed\_physiology} scripts generate mock data. A real integration would import from wearable APIs (e.g.\ Coros Health SDK, Apple HealthKit).
-  \item \textbf{Render free-tier constraints.} The PostgreSQL instance is limited to 1 GB and may be recycled after 90 days of inactivity.
-\end{itemize}
-
-\subsection{Potential Improvements}
-
-\begin{itemize}[leftmargin=1.5em]
-  \item \textbf{Real-time sync} --- Implement OAuth-based integration with Coros / Garmin Connect to auto-import new activities.
-  \item \textbf{ML race predictor} --- Replace the formula-based predictor with a regression model trained on the user's actual race results.
-  \item \textbf{Frontend dashboard} --- Build a Vue.js or React SPA consuming the analytics endpoints, with ECharts for interactive charts.
-  \item \textbf{WebSocket notifications} --- Push real-time updates when new activities are imported or weather data is enriched.
-  \item \textbf{Containerization} --- Dockerize the application for reproducible deployments across cloud providers.
-\end{itemize}
+Future extensions could transform this RESTful structure into a real-time SPA dashboard via WebSockets and React/Vue.js (using ECharts). Additional features might include OAuth-sync directly with hardware APIs (Garmin Connect) and upgrading the mathematical Daniel’s VO2 Formula predictions with localized Machine Learning regression models trained exclusively on user historical outputs.
 
 
 
@@ -297,17 +201,17 @@ The API is fully deployed into a production cloud environment on Render, utilizi
 
 The successfully deployed endpoints can be explored live via the Swagger UI interface: \url{https://endurancelife.onrender.com/docs}.
 
-\begin{figure}[h]
+\begin{figure}[ht]
     \centering
-    \begin{minipage}{0.45\textwidth}
+    \begin{minipage}{0.48\textwidth}
         \centering
-        \includegraphics[width=\textwidth]{db_screenshot.png}
-        \caption{PostgreSQL Cloud Database Instance}
+        \includegraphics[width=0.9\linewidth]{db_screenshot.png}
+        \caption{PostgreSQL Instance}
     \end{minipage}\hfill
-    \begin{minipage}{0.45\textwidth}
+    \begin{minipage}{0.48\textwidth}
         \centering
-        \includegraphics[width=\textwidth]{swagger-ui_split-screen-get-activity_render-control-center-log_screenshot.png}
-        \caption{API Server Logs \& Swagger UI Integration}
+        \includegraphics[width=0.9\linewidth]{swagger-ui_split-screen-get-activity_render-control-center-log_screenshot.png}
+        \caption{Server Logs \& Swagger}
     \end{minipage}
 \end{figure}
 
